@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="JCB Inventory"/>
+<title>JCB Inventory</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#f1f5f9;color:#1e293b;min-height:100vh;}
+input,select,textarea{font-family:'DM Sans',sans-serif;}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4);}
+::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-track{background:#f1f5f9;}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px;}
+.header{background:#fff;border-bottom:3px solid #f97316;box-shadow:0 1px 4px rgba(0,0,0,.07);padding:0 16px;}
+.header-inner{max-width:720px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:58px;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ea580c,#f97316);display:flex;align-items:center;justify-content:center;font-size:20px;}
+.logo-name{font-family:'Bebas Neue',cursive;font-size:21px;letter-spacing:2px;color:#ea580c;line-height:1;}
+.logo-sub{font-size:9px;color:#94a3b8;letter-spacing:.1em;text-transform:uppercase;font-weight:600;}
+.tabs{background:#fff;border-bottom:1px solid #e2e8f0;overflow-x:auto;}
+.tabs-inner{max-width:720px;margin:0 auto;display:flex;}
+.tab{background:none;border:none;color:#94a3b8;border-bottom:2px solid transparent;padding:11px 12px;font-weight:600;font-size:11px;cursor:pointer;white-space:nowrap;font-family:'DM Sans',sans-serif;}
+.tab.active{color:#ea580c;border-bottom-color:#ea580c;}
+.content{max-width:720px;margin:0 auto;padding:14px;}
+.card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.kpi{border-radius:12px;padding:10px;text-align:center;}
+.kpi-val{font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:1px;}
+.kpi-lbl{font-size:8px;color:#94a3b8;font-weight:600;margin-top:1px;}
+.sync-bar{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#16a34a;font-weight:600;display:flex;align-items:center;justify-content:space-between;}
+.install-hint{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#1d4ed8;font-weight:500;}
+.search-input{width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;color:#1e293b;font-size:13px;outline:none;margin-bottom:10px;}
+.series-bar{display:flex;gap:5px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;}
+.series-btn{background:#fff;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:4px 11px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.series-btn.active{background:#ea580c;color:#fff;border-color:#ea580c;}
+.count-label{font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:10px;}
+.product-card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.color-chip{display:inline-flex;align-items:center;background:#f1f5f9;border-radius:6px;padding:2px 8px;font-size:11px;color:#475569;font-weight:500;margin-left:6px;}
+.color-dot{width:10px;height:10px;border-radius:50%;margin-right:5px;flex-shrink:0;}
+.product-meta{font-size:10px;color:#94a3b8;margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;font-weight:500;}
+.barcode-tag{color:#16a34a;font-weight:600;}
+.add-barcode{color:#f97316;font-weight:600;cursor:pointer;}
+.badge{padding:3px 9px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;}
+.qty-row{display:flex;justify-content:space-between;align-items:center;margin-top:9px;}
+.qty-btn{width:30px;height:30px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;font-size:18px;cursor:pointer;line-height:1;}
+.qty-val{font-family:'Bebas Neue',cursive;font-size:24px;min-width:30px;text-align:center;color:#ea580c;}
+.min-label{font-size:10px;color:#cbd5e1;font-weight:500;}
+.action-btns{display:flex;gap:6px;}
+.edit-btn{background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:12px;}
+.del-btn{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:12px;}
+.btn-primary{background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:700;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.btn-outline{background:#fff7ed;border:1px solid #fed7aa;color:#ea580c;border-radius:10px;padding:9px 16px;font-weight:700;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.btn-green{background:#16a34a;color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:700;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.btn-gray{background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;border-radius:10px;padding:9px 16px;font-weight:700;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.section-title{font-family:'Bebas Neue',cursive;font-size:24px;letter-spacing:2px;color:#ea580c;margin-bottom:2px;}
+.section-sub{font-size:11px;color:#94a3b8;font-weight:500;margin-bottom:14px;}
+.filter-bar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+.filter-btn{background:#fff;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;}
+.filter-btn.active{background:#ea580c;color:#fff;border-color:#ea580c;}
+.log-card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.log-card.out{border-left:3px solid #f97316;}.log-card.returned{border-left:3px solid #16a34a;}
+.return-btn{background:#dcfce7;border:1px solid #bbf7d0;color:#16a34a;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;}
+.range-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}.range-row>div{flex:1;min-width:120px;}
+.field-label{display:block;font-size:10px;font-weight:700;color:#94a3b8;margin-bottom:5px;text-transform:uppercase;letter-spacing:.07em;}
+.field-input{width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;color:#1e293b;font-size:13px;outline:none;box-sizing:border-box;}
+.kpi3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.bar-wrap{background:#e2e8f0;border-radius:4px;height:7px;flex:1;overflow:hidden;}
+.bar-fill{height:100%;border-radius:4px;transition:width .4s;}
+.bar-row{margin-bottom:12px;}.bar-label{display:flex;justify-content:space-between;margin-bottom:4px;}
+.planner-item{border-radius:10px;padding:11px;margin-bottom:8px;border:1px solid #e2e8f0;}
+.planner-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;}
+.planner-cell{border-radius:8px;padding:8px;text-align:center;}
+.planner-val{font-family:'Bebas Neue',cursive;font-size:18px;}
+.planner-lbl{font-size:9px;color:#94a3b8;font-weight:600;margin-top:1px;}
+.import-types{display:flex;gap:8px;margin-bottom:14px;}
+.import-type-btn{flex:1;border-radius:10px;padding:10px;font-weight:600;font-size:12px;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#64748b;}
+.import-type-btn.active{background:#ea580c;color:#fff;border-color:#ea580c;}
+.hint-box{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:11px;color:#92400e;font-weight:500;line-height:1.8;}
+.preview-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #dcfce7;font-size:11px;}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;color:#fff;padding:10px 22px;border-radius:12px;font-weight:700;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.2);white-space:nowrap;animation:sd .2s ease;}
+@keyframes sd{from{opacity:0;transform:translateX(-50%) translateY(-10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;}
+.overlay.bottom{align-items:flex-end;justify-content:center;}
+.modal{background:#fff;border-radius:18px;padding:24px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.modal.sheet{border-radius:20px 20px 0 0;max-width:720px;max-height:93vh;overflow-y:auto;}
+.modal-title{font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:2px;color:#ea580c;}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+.close-btn{background:#f1f5f9;border:none;color:#64748b;border-radius:8px;width:32px;height:32px;font-size:16px;cursor:pointer;}
+.field-wrap{margin-bottom:12px;}
+.loading{text-align:center;padding:60px 20px;color:#94a3b8;}
+.spin{display:inline-block;font-size:36px;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.cart-item{display:flex;align-items:center;gap:10px;padding:10px;background:#f8fafc;border-radius:10px;margin-bottom:8px;border:1px solid #e2e8f0;}
+.cart-item-name{flex:1;font-size:13px;font-weight:600;}
+.cart-qty-btn{width:26px;height:26px;border-radius:6px;background:#fff;border:1px solid #e2e8f0;color:#475569;font-size:15px;cursor:pointer;line-height:1;}
+.cart-qty{font-family:'Bebas Neue',cursive;font-size:20px;min-width:24px;text-align:center;color:#ea580c;}
+.cart-remove{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;}
+.hist-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:12px;margin-bottom:8px;}
+.hist-badge{padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;}
+#scannerVideo{width:100%;border-radius:12px;background:#000;}
+.scan-line{position:absolute;top:50%;left:0;right:0;height:2px;background:#ea580c;opacity:.8;animation:scanMove 2s ease-in-out infinite;}
+@keyframes scanMove{0%,100%{top:30%}50%{top:70%}}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading"><div class="spin">&#x1F3A3;</div><div style="margin-top:14px;font-weight:700;font-size:16px;color:#475569;">Loading JCB Inventory...</div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+<script>
+var SB_URL="https://rgjnasxasmwzvywgkgdu.supabase.co";
+var SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnam5hc3hhc213enZ5d2drZ2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODQ3NjYsImV4cCI6MjA5NDg2MDc2Nn0.kBEkFRW1pe5BAU_P4fhZFcbzBMxfUR2q5-Tvxq16vB8";
+var HDR={"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json"};
+
+function dbGet(t,q){
+  return fetch(SB_URL+"/rest/v1/"+t+(q||""),{headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});return r.json();});
+}
+function dbPost(t,b){
+  return fetch(SB_URL+"/rest/v1/"+t,{method:"POST",headers:Object.assign({},HDR,{"Prefer":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify(b)}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});
+}
+function dbPatch(t,f,b){
+  return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"PATCH",headers:Object.assign({},HDR,{"Prefer":"return=minimal"}),body:JSON.stringify(b)}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});
+}
+function dbDelete(t,f){
+  return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});
+}
+function logHistory(prod,before,after,type,who,note){
+  return dbPost("history",{id:Date.now()+(Math.random()*1000|0),product_id:prod.id,product_name:prod.name,color:prod.color||"",change_type:type,qty_before:before,qty_after:after,changed_by:who,note:note||""}).catch(function(e){console.warn("History:",e);});
+}
+
+var SEED=[
+{id:101,name:"Stick Bait",color:"Purple Haze",series:"Stick Baits",sku:"JCB-SB-PH",barcode:"850070815123",price:6.99,pack:8,qty:318,min:40,loc:"Shelf A1"},
+{id:102,name:"Stick Bait",color:"Midnight Blue",series:"Stick Baits",sku:"JCB-SB-MB",barcode:"850070815093",price:6.99,pack:8,qty:166,min:40,loc:"Shelf A1"},
+{id:103,name:"Stick Bait",color:"Bloodline",series:"Stick Baits",sku:"JCB-SB-BL",barcode:"850070815086",price:6.99,pack:8,qty:148,min:40,loc:"Shelf A1"},
+{id:104,name:"Stick Bait",color:"Green Pumpkin",series:"Stick Baits",sku:"JCB-SB-GP",barcode:"850070815116",price:6.99,pack:8,qty:159,min:40,loc:"Shelf A1"},
+{id:105,name:"Stick Bait",color:"Ringo's Gift",series:"Stick Baits",sku:"JCB-SB-RG",barcode:"850070815079",price:6.99,pack:8,qty:62,min:24,loc:"Shelf A1"},
+{id:106,name:"Stick Bait",color:"Melon Punch",series:"Stick Baits",sku:"JCB-SB-MP",barcode:"850070815130",price:6.99,pack:8,qty:66,min:24,loc:"Shelf A1"},
+{id:107,name:"Stick Bait",color:"Blackberry",series:"Stick Baits",sku:"JCB-SB-BB",barcode:"850070815581",price:6.99,pack:8,qty:0,min:40,loc:"TBD"},
+{id:108,name:"Stick Bait",color:"Ringo Red Flake",series:"Stick Baits",sku:"JCB-SB-RRF",barcode:"850070815635",price:6.99,pack:8,qty:0,min:40,loc:"TBD"},
+{id:201,name:"6in Finesse Worm",color:"Green Pumpkin",series:"Finesse Worms",sku:"JCB-FW6-GP",barcode:"850070815048",price:6.99,pack:8,qty:308,min:40,loc:"Shelf A2"},
+{id:202,name:"6in Finesse Worm",color:"Bloodline",series:"Finesse Worms",sku:"JCB-FW6-BL",barcode:"850070815017",price:6.99,pack:8,qty:409,min:40,loc:"Shelf A2"},
+{id:203,name:"6in Finesse Worm",color:"Midnight Blue",series:"Finesse Worms",sku:"JCB-FW6-MB",barcode:"850070815024",price:6.99,pack:8,qty:292,min:40,loc:"Shelf A2"},
+{id:204,name:"6in Finesse Worm",color:"Purple Haze",series:"Finesse Worms",sku:"JCB-FW6-PH",barcode:"850070815055",price:6.99,pack:8,qty:251,min:40,loc:"Shelf A2"},
+{id:205,name:"6in Finesse Worm",color:"Melon Punch",series:"Finesse Worms",sku:"JCB-FW6-MP",barcode:"850070815062",price:6.99,pack:8,qty:104,min:24,loc:"Shelf A2"},
+{id:206,name:"6in Finesse Worm",color:"Ringo's Gift",series:"Finesse Worms",sku:"JCB-FW6-RG",barcode:"850070815000",price:6.99,pack:8,qty:68,min:24,loc:"Shelf A2"},
+{id:207,name:"6in Finesse Worm",color:"Dirty Dawn",series:"Finesse Worms",sku:"JCB-FW6-DD",barcode:"850070815710",price:6.99,pack:8,qty:0,min:40,loc:"TBD"},
+{id:208,name:"6in Finesse Worm",color:"Oxblood",series:"Finesse Worms",sku:"JCB-FW6-OX",barcode:"850070815697",price:6.99,pack:8,qty:0,min:40,loc:"TBD"},
+{id:301,name:"5in Neko",color:"Green Pumpkin",series:"Nekos",sku:"JCB-NK5-GP",barcode:"850070815185",price:6.99,pack:8,qty:365,min:40,loc:"Shelf A3"},
+{id:302,name:"5in Neko",color:"Bloodline",series:"Nekos",sku:"JCB-NK5-BL",barcode:"850070815154",price:6.99,pack:8,qty:332,min:40,loc:"Shelf A3"},
+{id:303,name:"5in Neko",color:"Purple Haze",series:"Nekos",sku:"JCB-NK5-PH",barcode:"850070815192",price:6.99,pack:8,qty:264,min:40,loc:"Shelf A3"},
+{id:304,name:"5in Neko",color:"Midnight Blue",series:"Nekos",sku:"JCB-NK5-MB",barcode:"850070815161",price:6.99,pack:8,qty:124,min:40,loc:"Shelf A3"},
+{id:305,name:"5in Neko",color:"Ringo's Gift",series:"Nekos",sku:"JCB-NK5-RG",barcode:"850070815147",price:6.99,pack:8,qty:200,min:40,loc:"Shelf A3"},
+{id:306,name:"5in Neko",color:"Melon Punch",series:"Nekos",sku:"JCB-NK5-MP",barcode:"850070815208",price:6.99,pack:8,qty:228,min:40,loc:"Shelf A3"},
+{id:401,name:"4in Craw",color:"Green Pumpkin",series:"Craws",sku:"JCB-CW4-GP",barcode:"CB002",price:6.99,pack:8,qty:285,min:40,loc:"Shelf A4"},
+{id:402,name:"4in Craw",color:"Bloodline",series:"Craws",sku:"JCB-CW4-BL",barcode:"CB001",price:6.99,pack:8,qty:299,min:40,loc:"Shelf A4"},
+{id:403,name:"4in Craw",color:"Purple Haze",series:"Craws",sku:"JCB-CW4-PH",barcode:"850070815338",price:6.99,pack:8,qty:214,min:40,loc:"Shelf A4"},
+{id:404,name:"4in Craw",color:"Midnight Blue",series:"Craws",sku:"JCB-CW4-MB",barcode:"CB004",price:6.99,pack:8,qty:267,min:40,loc:"Shelf A4"},
+{id:405,name:"4in Craw",color:"Melon Punch",series:"Craws",sku:"JCB-CW4-MP",barcode:"CB003",price:6.99,pack:8,qty:197,min:24,loc:"Shelf A4"},
+{id:406,name:"4in Craw",color:"Ringo's Gift",series:"Craws",sku:"JCB-CW4-RG",barcode:"850070815284",price:6.99,pack:8,qty:129,min:24,loc:"Shelf A4"},
+{id:501,name:"4in Baby Hawg",color:"Purple Haze",series:"Baby Hawgs",sku:"JCB-BH4-PH",barcode:"BHB005",price:6.99,pack:8,qty:153,min:40,loc:"Shelf A5"},
+{id:502,name:"4in Baby Hawg",color:"Midnight Blue",series:"Baby Hawgs",sku:"JCB-BH4-MB",barcode:"BHB004",price:6.99,pack:8,qty:284,min:40,loc:"Shelf A5"},
+{id:503,name:"4in Baby Hawg",color:"Bloodline",series:"Baby Hawgs",sku:"JCB-BH4-BL",barcode:"BHB001",price:6.99,pack:8,qty:130,min:40,loc:"Shelf A5"},
+{id:504,name:"4in Baby Hawg",color:"Ringo's Gift",series:"Baby Hawgs",sku:"JCB-BH4-RG",barcode:"BHB006",price:6.99,pack:8,qty:117,min:24,loc:"Shelf A5"},
+{id:505,name:"4in Baby Hawg",color:"Green Pumpkin",series:"Baby Hawgs",sku:"JCB-BH4-GP",barcode:"BHB002",price:6.99,pack:8,qty:61,min:24,loc:"Shelf A5"},
+{id:506,name:"4in Baby Hawg",color:"Melon Punch",series:"Baby Hawgs",sku:"JCB-BH4-MP",barcode:"BHB003",price:6.99,pack:8,qty:115,min:24,loc:"Shelf A5"},
+{id:601,name:"Soft Jerk",color:"Bloodline",series:"Soft Jerk",sku:"JCB-SJ-BL",barcode:"SJ001",price:6.99,pack:8,qty:0,min:24,loc:"TBD"},
+{id:602,name:"Soft Jerk",color:"Purple Haze",series:"Soft Jerk",sku:"JCB-SJ-PH",barcode:"SJ005",price:6.99,pack:8,qty:0,min:24,loc:"TBD"},
+{id:603,name:"Soft Jerk",color:"Green Pumpkin",series:"Soft Jerk",sku:"JCB-SJ-GP",barcode:"SJ002",price:6.99,pack:8,qty:0,min:24,loc:"TBD"},
+{id:701,name:"Paddle Tail",color:"Green Ghost",series:"Paddle Tail",sku:"JCB-PT-GG",barcode:"850070815376",price:6.99,pack:8,qty:28,min:16,loc:"Shelf A6"},
+{id:710,name:"Swim Bait",color:"Oreoz",series:"Swim Bait",sku:"JCB-SW-OR",barcode:"850070815352",price:6.99,pack:8,qty:116,min:24,loc:"Shelf A6"},
+{id:801,name:"Terp Minnow",color:"Ringo Silver/BF",series:"Terp Minnow",sku:"JCB-TM-RSB",barcode:"850070815970",price:6.99,pack:8,qty:0,min:24,loc:"TBD"},
+{id:802,name:"Terp Minnow",color:"Blueish Shad",series:"Terp Minnow",sku:"JCB-TM-BSD",barcode:"850070815482",price:6.99,pack:8,qty:0,min:24,loc:"TBD"},
+{id:901,name:"XG8 Glide Bait",color:"Custom",series:"Glidebait",sku:"JCB-XG8-CU",barcode:"850070815505",price:125,pack:1,qty:3,min:2,loc:"Showcase"},
+{id:902,name:"XG8 Glide Bait",color:"BlueGill Dream",series:"Glidebait",sku:"JCB-XG8-BD",barcode:"850070815529",price:125,pack:1,qty:2,min:2,loc:"Showcase"},
+{id:903,name:"XG8 Glide Bait",color:"Kokanee Kush",series:"Glidebait",sku:"JCB-XG8-KK",barcode:"850070815536",price:125,pack:1,qty:2,min:2,loc:"Showcase"},
+{id:904,name:"XG8 Glide Bait",color:"Rainbow OG",series:"Glidebait",sku:"JCB-XG8-RO",barcode:"850070815543",price:125,pack:1,qty:1,min:2,loc:"Showcase"},
+{id:1001,name:"JC Walker",color:"Big Red / White",series:"JC Walker",sku:"JCB-WLK-RW",barcode:"",price:20.99,pack:1,qty:12,min:4,loc:"Shelf B1"},
+{id:1002,name:"JC Walker",color:"Chartreuse/Blue",series:"JC Walker",sku:"JCB-WLK-CB",barcode:"",price:20.99,pack:1,qty:10,min:4,loc:"Shelf B1"},
+{id:1003,name:"JC Walker",color:"Purple/Black",series:"JC Walker",sku:"JCB-WLK-PB",barcode:"",price:20.99,pack:1,qty:6,min:4,loc:"Shelf B1"},
+{id:1004,name:"JC Walker",color:"Black/White",series:"JC Walker",sku:"JCB-WLK-BW",barcode:"",price:20.99,pack:1,qty:3,min:4,loc:"Shelf B1"},
+{id:1101,name:"J-Rat",color:"Blue and Orange",series:"J-Rat",sku:"JCB-JR-BO",barcode:"",price:35,pack:1,qty:9,min:3,loc:"Shelf C1"},
+{id:1102,name:"J-Rat",color:"Purple",series:"J-Rat",sku:"JCB-JR-PU",barcode:"",price:35,pack:1,qty:11,min:3,loc:"Shelf C1"},
+{id:1103,name:"J-Rat",color:"Brown",series:"J-Rat",sku:"JCB-JR-BR",barcode:"",price:35,pack:1,qty:4,min:3,loc:"Shelf C1"},
+{id:1201,name:"Variety Pack",color:"",series:"Bundles",sku:"JCB-VAR56",barcode:"",price:43.93,pack:56,qty:6,min:3,loc:"Shelf D1"},
+{id:1202,name:"Tournament Tee",color:"Limited Edition",series:"Apparel",sku:"JCB-TEE-LE",barcode:"",price:0,pack:1,qty:14,min:5,loc:"Apparel"}
+];
+
+var COLORS=[{n:"Purple Haze",h:"#7c3aed"},{n:"Midnight Blue",h:"#1e3a8a"},{n:"Bloodline",h:"#991b1b"},{n:"Green Pumpkin",h:"#365314"},{n:"Melon Punch",h:"#ea580c"},{n:"Ringo's Gift",h:"#be185d"},{n:"Oreoz",h:"#44403c"},{n:"Ringo/Oreoz",h:"#78716c"},{n:"Blackberry",h:"#4a1d96"},{n:"Ringo Red Flake",h:"#9f1239"},{n:"Melon Purple Flake",h:"#c2410c"},{n:"Dirty Dawn",h:"#b45309"},{n:"June Bug",h:"#1e1b4b"},{n:"Purple w/ Black Flake",h:"#4c1d95"},{n:"Morning Dawn",h:"#a21caf"},{n:"Ringo Black Flake",h:"#881337"},{n:"Oxblood",h:"#7f1d1d"},{n:"Baby Bass White and Melon",h:"#0369a1"},{n:"Big Red / White",h:"#dc2626"},{n:"Chartreuse/Blue",h:"#65a30d"},{n:"Purple/Black",h:"#581c87"},{n:"Black/White",h:"#171717"},{n:"Blue/Orange",h:"#1d4ed8"},{n:"Bone White",h:"#a8a29e"},{n:"Chartreuse/White",h:"#84cc16"},{n:"Blue and Orange",h:"#0369a1"},{n:"Brown",h:"#78350f"},{n:"Grey",h:"#4b5563"},{n:"Purple",h:"#6d28d9"},{n:"Custom",h:"#334155"},{n:"White Ghost",h:"#94a3b8"},{n:"Rainbow OG",h:"#db2777"},{n:"Kokanee Kush",h:"#7e22ce"},{n:"BlueGill Dream",h:"#0284c7"},{n:"Motherlode Purple",h:"#6d28d9"},{n:"Ringo Silver/BF",h:"#94a3b8"},{n:"White Silver/PF",h:"#a78bfa"},{n:"Silver Minnow/BF",h:"#64748b"},{n:"Blueish Shad",h:"#3b82f6"},{n:"Green Ghost",h:"#16a34a"},{n:"Limited Edition",h:"#f97316"}];
+var SERIES=["All","Stick Baits","Nekos","Craws","Baby Hawgs","Finesse Worms","Soft Jerk","Paddle Tail","Swim Bait","Terp Minnow","Glidebait","JC Walker","J-Rat","Bundles","Apparel"];
+var CHANNELS=["Retail","Tournament","Wholesale","Online","Trade Show","Sample/Promo","Internal"];
+var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var TODAY=new Date().toISOString().slice(0,10);
+
+var products=[],logs=[],history=[];
+var activeTab="inv",search="",activeSeries="All",logFilter="All",histFilter="All";
+var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
+var lastSync=null,cart=[],currentUser=localStorage.getItem("jcb_user")||"";
+
+function getStatus(qty,min){if(qty===0)return"Out";if(qty<=min)return"Low";return"OK";}
+var STATUS={OK:{bg:"#dcfce7",tc:"#166534",dot:"#16a34a",label:"In Stock"},Low:{bg:"#fff7ed",tc:"#9a3412",dot:"#ea580c",label:"Low Stock"},Out:{bg:"#fef2f2",tc:"#991b1b",dot:"#dc2626",label:"Out of Stock"}};
+function colorHex(n){var c=COLORS.find(function(c){return c.n===n;});return c?c.h:"#94a3b8";}
+function dotHtml(n,s){s=s||10;if(!n)return"";var h=colorHex(n);var border=(h==="#a8a29e"||h==="#94a3b8")?"1px solid #cbd5e1":"none";return'<span class="color-dot" style="width:'+s+'px;height:'+s+'px;background:'+h+';border:'+border+'"></span>';}
+function showToast(msg,type){var t=document.createElement("div");t.className="toast";t.style.background=type==="err"?"#dc2626":type==="info"?"#2563eb":"#16a34a";t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.remove();},3000);}
+function exportCSV(rows,fn,keys){var csv=[keys.join(",")].concat(rows.map(function(r){return keys.map(function(k){return'"'+(r[k]==null?"":r[k])+'"';}).join(",");})).join("\n");var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=fn;a.click();}
+function timeAgo(d){if(!d)return"never";var s=Math.floor((Date.now()-d)/1000);if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";return Math.floor(s/3600)+"h ago";}
+function fmtDate(str){if(!str)return"";try{return new Date(str).toLocaleString();}catch(e){return str;}}
+
+function boot(){
+  dbGet("products","?order=name,color").then(function(p){
+    if(p.length===0){
+      showToast("First launch - loading products...","info");
+      return dbPost("products",SEED).then(function(){return dbGet("products","?order=name,color");});
+    }
+    return p;
+  }).then(function(p){
+    products=p;
+    return dbGet("logs","?order=created_at.desc");
+  }).then(function(l){
+    logs=l;
+    return dbGet("history","?order=changed_at.desc&limit=200");
+  }).then(function(h){
+    history=h;
+    lastSync=Date.now();
+    if(!currentUser){showUserPicker();}else{render();}
+  }).catch(function(e){
+    document.getElementById("app").innerHTML='<div class="loading"><div style="font-size:36px;">&#x26A0;&#xFE0F;</div><div style="margin-top:12px;font-weight:700;color:#dc2626;">Connection error</div><div style="margin-top:6px;font-size:12px;color:#64748b;">'+e.message+'</div><button onclick="boot()" style="margin-top:20px;background:#ea580c;color:#fff;border:none;border-radius:10px;padding:11px 24px;font-weight:700;font-size:13px;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Try Again</button></div>';
+  });
+}
+
+function doRefresh(){
+  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&limit=200");}).then(function(h){history=h;lastSync=Date.now();render();}).catch(function(){});
+}
+setInterval(doRefresh,10000);
+
+function showUserPicker(){
+  document.getElementById("app").innerHTML='<div style="max-width:400px;margin:80px auto;padding:24px;background:#fff;border-radius:18px;box-shadow:0 4px 24px rgba(0,0,0,.1);"><div style="font-family:\'Bebas Neue\',cursive;font-size:28px;color:#ea580c;margin-bottom:4px;">JOHNNY CREEK BAITS</div><div style="font-size:13px;color:#64748b;margin-bottom:20px;">Who is using this device?</div><div style="display:flex;flex-direction:column;gap:10px;"><button onclick="setUser(\'Thomas\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Thomas</button><button onclick="setUser(\'Team Member 2\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Team Member 2</button><button onclick="setUser(\'Team Member 3\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Team Member 3</button><div style="margin-top:8px;"><label style="font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-bottom:6px;">OR TYPE YOUR NAME</label><div style="display:flex;gap:8px;"><input id="customName" placeholder="Your name..." style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;font-size:13px;outline:none;"/><button onclick="setUser(document.getElementById(\'customName\').value)" style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px;">Go</button></div></div></div></div>';
+}
+
+function setUser(name){if(!name||!name.trim())return;currentUser=name.trim();localStorage.setItem("jcb_user",currentUser);render();}
+
+function addToCart(prod){
+  var ex=cart.find(function(i){return i.pid===prod.id;});
+  if(ex){ex.qty++;showToast(prod.name+" qty updated");}
+  else{cart.push({pid:prod.id,name:prod.name,color:prod.color||"",price:prod.price||0,qty:1});}
+}
+
+function confirmOrder(){
+  if(cart.length===0){showToast("Cart is empty","err");return;}
+  var person=document.getElementById("orderPerson")?document.getElementById("orderPerson").value:"";
+  var channel=document.getElementById("orderChannel")?document.getElementById("orderChannel").value:"Retail";
+  var project=document.getElementById("orderProject")?document.getElementById("orderProject").value:"";
+  var date=document.getElementById("orderDate")?document.getElementById("orderDate").value:TODAY;
+  if(!person.trim()){showToast("Please enter who this is for","err");return;}
+  localStorage.setItem("jcb_lastPerson",person);
+  for(var i=0;i<cart.length;i++){
+    var item=cart[i];
+    var prod=products.find(function(p){return p.id===item.pid;});
+    if(!prod||prod.qty<item.qty){showToast("Not enough stock: "+item.name,"err");return;}
+  }
+  var totalQty=cart.reduce(function(s,i){return s+i.qty;},0);
+  var totalVal=cart.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
+  var first=cart[0];
+  var cartCopy=cart.slice();
+  dbPost("logs",{id:Date.now(),name:first.name,color:first.color,pid:first.pid,qty:totalQty,price:totalQty>0?totalVal/totalQty:0,ch:channel,person:person,project:project,date:date,items:JSON.stringify(cartCopy),ret:null,st:"Out"}).then(function(){
+    var chain=Promise.resolve();
+    cartCopy.forEach(function(item){
+      chain=chain.then(function(){
+        var prod=products.find(function(p){return p.id===item.pid;});
+        if(!prod)return;
+        var nq=Math.max(0,prod.qty-item.qty);
+        return dbPatch("products","id=eq."+item.pid,{qty:nq}).then(function(){
+          return logHistory(prod,prod.qty,nq,"checkout",currentUser,"Order for "+person+" via "+channel+(project?" - "+project:""));
+        });
+      });
+    });
+    return chain;
+  }).then(function(){
+    cart=[];
+    showToast("Order confirmed! "+totalQty+" bags out");
+    return doRefresh();
+  }).catch(function(e){showToast("Order failed: "+e.message,"err");});
+}
+
+function render(){
+  var html="";
+  if(activeTab==="inv")html=invHTML();
+  else if(activeTab==="co")html=coHTML();
+  else if(activeTab==="rep")html=repHTML();
+  else if(activeTab==="hist")html=histHTML();
+  else if(activeTab==="imp")html=impHTML();
+  else html=expHTML();
+  document.getElementById("app").innerHTML=hdrHTML()+tabsHTML()+'<div class="content">'+html+"</div>";
+  wire();
+}
+
+function hdrHTML(){
+  var cartCount=cart.reduce(function(s,i){return s+i.qty;},0);
+  var badge=cartCount>0?'<span style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;">'+cartCount+"</span>":"";
+  return'<div class="header"><div class="header-inner"><div class="logo"><div class="logo-icon">&#x1F3A3;</div><div><div class="logo-name">Johnny Creek Baits</div><div class="logo-sub">&#x1F464; '+currentUser+' &middot; '+timeAgo(lastSync)+'</div></div></div><div style="display:flex;gap:7px;align-items:center;"><button class="btn-outline" id="btnRefresh">&#x1F504;</button><button class="btn-outline" id="btnScan">&#x1F4F7;</button><button class="btn-outline" id="btnCO" style="position:relative;">&#x1F3A3; Out'+badge+'</button><button class="btn-primary" id="btnAdd">+ Add</button></div></div></div>';
+}
+
+function tabsHTML(){
+  var tabs=[{id:"inv",i:"&#x1F4E6;",l:"Stock"},{id:"co",i:"&#x1F3A3;",l:"Checkout"},{id:"rep",i:"&#x1F4CA;",l:"Reports"},{id:"hist",i:"&#x1F4CB;",l:"History"},{id:"imp",i:"&#x2601;&#xFE0F;",l:"Import"},{id:"exp",i:"&#x1F4E4;",l:"Export"}];
+  return'<div class="tabs"><div class="tabs-inner">'+tabs.map(function(t){return'<button class="tab'+(activeTab===t.id?" active":"")+'" data-tab="'+t.id+'">'+t.i+" "+t.l+"</button>";}).join("")+"</div></div>";
+}
+
+function invHTML(){
+  var f=products.filter(function(p){return activeSeries==="All"||p.series===activeSeries;}).filter(function(p){return [p.name,p.color||"",p.sku||"",p.barcode||"",p.loc||""].join(" ").toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){var n=a.name.localeCompare(b.name);return n!==0?n:(a.color||"").localeCompare(b.color||"");});
+  var low=products.filter(function(p){return getStatus(p.qty,p.min)==="Low";}).length;
+  var out=products.filter(function(p){return getStatus(p.qty,p.min)==="Out";}).length;
+  var bc=products.filter(function(p){return p.barcode;}).length;
+  var cards=f.map(function(p){
+    var st=STATUS[getStatus(p.qty,p.min)];
+    return'<div class="product-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px;"><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;flex-wrap:wrap;"><span style="font-weight:700;font-size:15px;">'+p.name+"</span>"+(p.color?'<span class="color-chip">'+dotHtml(p.color)+p.color+"</span>":"")+'</div><div class="product-meta"><span>'+(p.sku||"")+"</span>"+(p.barcode?'<span class="barcode-tag">&#x258C; '+p.barcode+'</span>':'<span class="add-barcode" data-edit="'+p.id+'">+ barcode</span>')+"<span>"+(p.loc||"")+"</span></div>"+(p.pack>1?'<div style="font-size:10px;color:#94a3b8;margin-top:1px;">'+p.pack+"-pack &middot; $"+Number(p.price).toFixed(2)+"</div>":"")+'</div><span class="badge" style="background:'+st.bg+';color:'+st.tc+';margin-left:8px;flex-shrink:0;"><span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:'+st.dot+';margin-right:4px;vertical-align:middle;"></span>'+st.label+'</span></div><div class="qty-row"><div style="display:flex;align-items:center;gap:8px;"><button class="qty-btn" data-adj="'+p.id+'" data-d="-1">&minus;</button><span class="qty-val">'+p.qty+'</span><button class="qty-btn" data-adj="'+p.id+'" data-d="1">+</button><span class="min-label">min '+p.min+'</span></div><div class="action-btns"><button style="background:#eff6ff;border:1px solid #bfdbfe;color:#2563eb;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:11px;font-weight:600;" data-addcart="'+p.id+'">+ Cart</button><button class="edit-btn" data-edit="'+p.id+'">&#x270F;&#xFE0F;</button><button class="del-btn" data-del="'+p.id+'">&#x1F5D1;&#xFE0F;</button></div></div></div>';
+  }).join("");
+  return'<div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><div class="kpi" style="background:#fffbeb;border:1px solid #fde68a;"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></div><div class="kpi" style="background:#fef2f2;border:1px solid #fecaca;"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></div><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+search+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div class="count-label">'+f.length+" VARIANTS</div>"+cards;
+}
+
+function coHTML(){
+  var cartTotal=cart.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
+  var vis=logFilter==="All"?logs:logs.filter(function(l){return l.st===logFilter;});
+  var cartSection="";
+  if(cart.length>0){
+    var cartItems=cart.map(function(item,idx){return'<div class="cart-item"><div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">'+dotHtml(item.color)+'<div class="cart-item-name">'+item.name+(item.color?" &mdash; "+item.color:"")+'</div></div><div style="display:flex;align-items:center;gap:6px;"><button class="cart-qty-btn" data-cartadj="'+idx+'" data-d="-1">&minus;</button><span class="cart-qty">'+item.qty+'</span><button class="cart-qty-btn" data-cartadj="'+idx+'" data-d="1">+</button><button class="cart-remove" data-cartrem="'+idx+'">&times;</button></div></div>';}).join("");
+    cartSection='<div class="card" style="border:1px solid #fed7aa;margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:#ea580c;">&#x1F6D2; CURRENT ORDER ('+cart.length+' items)</div><div style="font-size:12px;color:#64748b;">Est. $'+cartTotal.toFixed(2)+'</div></div>'+cartItems+'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;"><label class="field-label">Who is this for?</label><input class="field-input" id="orderPerson" placeholder="Customer / Sales Rep" value="'+(localStorage.getItem("jcb_lastPerson")||"")+'"/></div><div style="flex:1;min-width:140px;"><label class="field-label">Channel</label><select class="field-input" id="orderChannel">'+CHANNELS.map(function(c){return"<option>"+c+"</option>";}).join("")+'</select></div></div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;"><label class="field-label">Project / Order #</label><input class="field-input" id="orderProject" placeholder="e.g. Bass Pro 1234"/></div><div style="flex:1;min-width:120px;"><label class="field-label">Date</label><input class="field-input" type="date" id="orderDate" value="'+TODAY+'"/></div></div><div style="margin-top:12px;display:flex;gap:8px;"><button class="btn-gray" id="btnClearCart" style="flex:1;">Clear</button><button class="btn-primary" id="btnConfirmOrder" style="flex:2;font-size:14px;padding:12px;">Confirm Order ('+cart.reduce(function(s,i){return s+i.qty;},0)+' bags)</button></div></div>';
+  }else{
+    cartSection='<div class="card" style="background:#fff7ed;border:1px solid #fed7aa;margin-bottom:16px;text-align:center;padding:20px;"><div style="font-size:24px;margin-bottom:8px;">&#x1F6D2;</div><div style="font-weight:600;color:#92400e;margin-bottom:4px;">Cart is empty</div><div style="font-size:12px;color:#b45309;">Tap + Cart on any product in Stock tab</div></div>';
+  }
+  var logCards=vis.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;"><div style="font-size:36px;">&#x1F3A3;</div><div style="margin-top:8px;">No records yet</div></div>':vis.map(function(l){var days=Math.floor((Date.now()-new Date(l.date))/86400000);return'<div class="log-card '+(l.st==="Out"?"out":"returned")+'"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:14px;">'+l.name+"</span>"+(l.color?'<span style="display:flex;align-items:center;font-size:11px;color:#64748b;">'+dotHtml(l.color)+l.color+"</span>":"")+'<span style="background:'+(l.st==="Out"?"#eff6ff":"#dcfce7")+';color:'+(l.st==="Out"?"#2563eb":"#16a34a")+';padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">'+(l.st==="Out"?"OUT":"BACK")+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">'+(l.ch?'<span style="margin-right:10px;">&#x1F3EA; '+l.ch+"</span>":"")+(l.person?'<span style="margin-right:10px;">&#x1F464; '+l.person+"</span>":"")+(l.project?'<span>&#x1F4CB; '+l.project+"</span>":"")+'</div></div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;margin-left:8px;">&times;'+l.qty+'</div></div><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-size:10px;color:#94a3b8;">'+l.date+(l.ret?'<span style="color:#16a34a;"> &rarr; back '+l.ret+"</span>":'<span style="color:'+(days>7?"#dc2626":"#94a3b8")+'"> &middot; '+days+"d out"+(days>7?" &#x26A0;&#xFE0F;":"")+"</span>")+(l.price>0?" &middot; $"+(l.qty*l.price).toFixed(2):"")+"</div>"+(l.st==="Out"?'<button class="return-btn" data-ret="'+l.id+'">&#x21A9; Return</button>':"")+"</div></div>";}).join("");
+  return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><div><div class="section-title">CHECKOUT</div><div class="section-sub">'+logs.filter(function(l){return l.st==="Out";}).length+' units currently out</div></div><button class="btn-primary" id="btnCO2">&#x1F3A3; New Order</button></div>'+cartSection+'<div class="filter-bar">'+["All","Out","Returned"].map(function(f){return'<button class="filter-btn'+(logFilter===f?" active":"")+'" data-logf="'+f+'">'+f+"</button>";}).join("")+"</div>"+logCards;
+}
+
+function histHTML(){
+  var vis=histFilter==="All"?history:history.filter(function(h){return h.change_type===histFilter;});
+  var typeColors={checkout:"#eff6ff",adjustment:"#fffbeb","a+":"#f0fdf4","a-":"#fef2f2",add:"#f0fdf4",edit:"#fffbeb","delete":"#fef2f2"};
+  var typeText={checkout:"#2563eb",adjustment:"#d97706","a+":"#16a34a","a-":"#dc2626",add:"#16a34a",edit:"#d97706","delete":"#dc2626"};
+  var cards=vis.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;"><div style="font-size:36px;">&#x1F4CB;</div><div style="margin-top:8px;">No history yet</div></div>':vis.map(function(h){var diff=(h.qty_after||0)-(h.qty_before||0);var diffStr=diff>0?"+"+diff:String(diff);var diffColor=diff>0?"#16a34a":diff<0?"#dc2626":"#64748b";var bg=typeColors[h.change_type]||"#f1f5f9";var tc=typeText[h.change_type]||"#64748b";return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:13px;">'+(h.product_name||"")+(h.color?" &mdash; "+h.color:"")+'</span><span class="hist-badge" style="background:'+bg+';color:'+tc+';">'+h.change_type+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">&#x1F464; <strong>'+(h.changed_by||"Unknown")+"</strong>"+(h.note?" &middot; "+h.note:"")+'</div></div><div style="text-align:right;flex-shrink:0;margin-left:8px;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:'+diffColor+';">'+diffStr+'</div><div style="font-size:9px;color:#94a3b8;">'+(h.qty_before||0)+"&rarr;"+(h.qty_after||0)+'</div></div></div><div style="font-size:10px;color:#94a3b8;">'+fmtDate(h.changed_at)+"</div></div>";}).join("");
+  return'<div class="section-title">INVENTORY HISTORY</div><div class="section-sub">Every change with who made it and when</div><div class="filter-bar">'+["All","checkout","adjustment","add","edit","delete"].map(function(f){return'<button class="filter-btn'+(histFilter===f?" active":"")+'" data-histf="'+f+'">'+f+"</button>";}).join("")+'</div><button class="btn-outline" id="btnExportHist" style="width:100%;margin-bottom:14px;">&#x2B07;&#xFE0F; Export History CSV</button>'+cards;
+}
+
+function repHTML(){
+  var mo=parseInt(rng),cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-mo);
+  var recent=logs.filter(function(l){return new Date(l.date)>=cutoff;});
+  var byP={},byM={},byC={},byCol={};
+  recent.forEach(function(l){var k=l.name+(l.color?" - "+l.color:"");byP[k]=(byP[k]||0)+l.qty;byC[l.ch||""]=(byC[l.ch||""]||0)+l.qty;if(l.color)byCol[l.color]=(byCol[l.color]||0)+l.qty;var mk=l.date.slice(0,7);byM[mk]=(byM[mk]||0)+l.qty;});
+  var topP=Object.entries(byP).sort(function(a,b){return b[1]-a[1];});
+  var topC=Object.entries(byC).sort(function(a,b){return b[1]-a[1];});
+  var topCol=Object.entries(byCol).sort(function(a,b){return b[1]-a[1];});
+  var mos=Object.entries(byM).sort(function(a,b){return a[0].localeCompare(b[0]);}).map(function(e){return{label:MONTHS[parseInt(e[0].split("-")[1])-1]+"'"+e[0].slice(2,4),value:e[1]};});
+  var units=recent.reduce(function(s,l){return s+l.qty;},0);
+  var rev=recent.reduce(function(s,l){return s+(l.qty*(l.price||0));},0);
+  var mxP=topP.length?topP[0][1]:1,mxM=Math.max.apply(null,mos.map(function(m){return m.value;}).concat([1])),mxC=topC.length?topC[0][1]:1,mxCol=topCol.length?topCol[0][1]:1;
+  var PC=["#f97316","#fb923c","#fbbf24","#a3e635","#4ade80"];
+  var empty='<div style="color:#94a3b8;font-size:12px;">Log checkouts to see data</div>';
+  var ch="";
+  if(rv==="products")ch='<div style="font-weight:700;font-size:14px;margin-bottom:12px;">&#x1F3C6; Best-Moving Variants</div>'+(topP.length===0?empty:topP.map(function(e,i){return'<div class="bar-row"><div class="bar-label"><div style="font-size:12px;font-weight:600;">'+(["&#x1F947;","&#x1F948;","&#x1F949;"][i]||"")+" "+e[0]+'</div><span style="font-family:\'Bebas Neue\',cursive;font-size:16px;color:#ea580c;">'+e[1]+'</span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+((e[1]/mxP)*100)+'%;background:'+(PC[i]||"#cbd5e1")+';"></div></div></div>';}).join(""));
+  else if(rv==="colors")ch='<div style="font-weight:700;font-size:14px;margin-bottom:12px;">&#x1F3A8; Top Colors</div>'+(topCol.length===0?empty:topCol.map(function(e){return'<div class="bar-row"><div class="bar-label"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;">'+dotHtml(e[0])+e[0]+'</div><span style="font-family:\'Bebas Neue\',cursive;font-size:16px;color:#ea580c;">'+e[1]+'</span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+((e[1]/mxCol)*100)+'%;background:'+colorHex(e[0])+';"></div></div></div>';}).join(""));
+  else if(rv==="time")ch='<div style="font-weight:700;font-size:14px;margin-bottom:12px;">&#x1F4C5; Volume Over Time</div>'+(mos.length===0?empty:mos.map(function(m){return'<div class="bar-row"><div class="bar-label"><span style="font-size:12px;font-weight:600;">'+m.label+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:16px;color:#d97706;">'+m.value+'</span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+((m.value/mxM)*100)+'%;background:#f97316;"></div></div></div>';}).join(""));
+  else ch='<div style="font-weight:700;font-size:14px;margin-bottom:12px;">&#x1F3EA; By Channel</div>'+(topC.length===0?empty:topC.map(function(e){return'<div class="bar-row"><div class="bar-label"><span style="font-size:12px;font-weight:600;">'+e[0]+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:16px;color:#16a34a;">'+e[1]+'</span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+((e[1]/mxC)*100)+'%;background:#16a34a;"></div></div></div>';}).join(""));
+  var plan=topP.slice(0,5).map(function(e){var parts=(e[0]+" - ").split(" - ");var bn=parts[0].trim(),cn=parts[1]?parts[1].trim():"";var p=products.find(function(x){return x.name===bn&&(!cn||x.color===cn);});var avg=Math.round(e[1]/mo),re=Math.max(p?p.min:0,avg*2),nr=p&&p.qty<=p.min;return'<div class="planner-item" style="background:'+(nr?"#fef2f2":"#f8fafc")+';border-color:'+(nr?"#fecaca":"#e2e8f0")+'"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="display:flex;align-items:center;gap:5px;">'+(cn?dotHtml(cn):"")+'<span style="font-weight:700;font-size:13px;">'+e[0]+'</span></div>'+(nr?'<span style="background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:5px;font-size:9px;font-weight:700;border:1px solid #fecaca;">&#x26A0;&#xFE0F; RESTOCK</span>':"")+'</div><div class="planner-grid"><div class="planner-cell" style="background:#f1f5f9;"><div class="planner-val" style="color:#475569;">'+avg+'</div><div class="planner-lbl">Avg/mo</div></div><div class="planner-cell" style="background:'+(nr?"#fef2f2":"#dcfce7")+'"><div class="planner-val" style="color:'+(nr?"#dc2626":"#16a34a")+'">'+(p?p.qty:"?")+'</div><div class="planner-lbl">In Stock</div></div><div class="planner-cell" style="background:#fff7ed;"><div class="planner-val" style="color:#ea580c;">'+re+'</div><div class="planner-lbl">Produce</div></div></div></div>';}).join("");
+  return'<div class="section-title">ANALYTICS</div><div class="section-sub">Production planning from real demand</div><div class="range-row"><div><label class="field-label">Time Range</label><select class="field-input" id="rngSel"><option value="1"'+(rng==="1"?" selected":"")+'">1 month</option><option value="3"'+(rng==="3"?" selected":"")+'>3 months</option><option value="6"'+(rng==="6"?" selected":"")+'>6 months</option></select></div><div><label class="field-label">View By</label><select class="field-input" id="rvSel"><option value="products"'+(rv==="products"?" selected":"")+'>Top Products</option><option value="colors"'+(rv==="colors"?" selected":"")+'>Top Colors</option><option value="time"'+(rv==="time"?" selected":"")+'>Over Time</option><option value="channels"'+(rv==="channels"?" selected":"")+'>By Channel</option></select></div></div><div class="kpi3"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+recent.length+'</div><div class="kpi-lbl">Transactions</div></div><div class="kpi" style="background:#fffbeb;border:1px solid #fde68a;"><div class="kpi-val" style="color:#d97706;">'+units+'</div><div class="kpi-lbl">Units Out</div></div><div class="kpi" style="background:#dcfce7;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:#16a34a;">$'+rev.toFixed(0)+'</div><div class="kpi-lbl">Est. Revenue</div></div></div><div class="card">'+ch+'</div><div class="card" style="border:1px solid #fed7aa;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;letter-spacing:2px;color:#ea580c;margin-bottom:10px;">&#x1F3ED; PRODUCTION PLANNER</div>'+(topP.length===0?'<div style="color:#94a3b8;font-size:12px;">Log checkouts to see recommendations.</div>':plan)+"</div>";
+}
+
+function impHTML(){
+  return'<div class="section-title">IMPORT DATA</div><div class="section-sub">Paste from Google Sheets to bulk-update</div><div style="margin-bottom:14px;"><label class="field-label">What are you importing?</label><div class="import-types"><button class="import-type-btn'+(iType==="barcodes"?" active":"")+'" data-itype="barcodes">&#x1F532; Barcodes</button><button class="import-type-btn'+(iType==="quantities"?" active":"")+'" data-itype="quantities">&#x1F4E6; Quantities</button></div></div><div class="hint-box">'+(iType==="barcodes"?"Format: <strong>SKU | Barcode</strong><br>Example: <span style='+"'"+'color:#16a34a;font-weight:700;'+"'"+'>JCB-SB-PH  850070815123</span>':"Format: <strong>Name | Color | Qty</strong><br>Example: <span style='+"'"+'color:#16a34a;font-weight:700;'+"'"+'>Stick Bait  Purple Haze  318</span>')+'</div><div class="field-wrap"><label class="field-label">Paste data here</label><textarea class="field-input" id="iTA" rows="7" style="resize:vertical;line-height:1.6;">'+iText+'</textarea></div><button class="btn-outline" id="btnPreview" style="width:100%;margin-bottom:10px;padding:11px;">&#x1F50D; Preview Import</button>'+(iMsg?'<div class="hint-box">'+iMsg+"</div>":"")+(iPrev&&iPrev.length>0?'<div class="card" style="border:1px solid #bbf7d0;background:#f0fdf4;"><div style="font-weight:700;font-size:13px;margin-bottom:10px;color:#16a34a;">&#x2705; '+iPrev.length+' matches ready</div><div style="max-height:200px;overflow-y:auto;">'+iPrev.slice(0,20).map(function(m){return'<div class="preview-row"><div style="display:flex;align-items:center;gap:6px;">'+dotHtml(m.color)+'<span style="font-weight:600;">'+m.name+"</span>"+(m.color?'<span style="color:#64748b;">'+m.color+"</span>":"")+"</div>"+(iType==="barcodes"?'<span style="color:#16a34a;font-weight:700;">&#x258C; '+m.barcode+"</span>":'<span style="font-family:\'Bebas Neue\',cursive;font-size:16px;color:#ea580c;">'+m.qty+"</span>")+"</div>";}).join("")+'</div></div><button class="btn-green" id="btnApply" style="width:100%;padding:12px;font-size:14px;">&#x2705; Apply '+iPrev.length+" Updates to Database</button>":"");
+}
+
+function expHTML(){
+  return'<div class="section-title">EXPORT</div><div class="section-sub">Download for Google Sheets or backup</div><div class="card"><div style="font-weight:700;font-size:15px;margin-bottom:5px;">&#x1F4E6; Full Inventory</div><div style="font-size:12px;color:#64748b;margin-bottom:12px;">All variants with barcodes, quantities and prices.</div><button class="btn-green" id="btnExpInv" style="width:100%;">&#x2B07;&#xFE0F; Download Inventory CSV</button></div><div class="card"><div style="font-weight:700;font-size:15px;margin-bottom:5px;">&#x1F3A3; Checkout Log</div><div style="font-size:12px;color:#64748b;margin-bottom:12px;">Full history of all checkouts.</div><button class="btn-primary" id="btnExpLogs" style="width:100%;">&#x2B07;&#xFE0F; Download Checkout Log CSV</button></div><div class="card"><div style="font-weight:700;font-size:15px;margin-bottom:5px;">&#x1F4CB; Change History</div><div style="font-size:12px;color:#64748b;margin-bottom:12px;">Every inventory change with who and when.</div><button class="btn-gray" id="btnExpHist" style="width:100%;">&#x2B07;&#xFE0F; Download History CSV</button></div>';
+}
+
+function openScanner(){
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mScan"><div class="modal sheet" style="padding:20px;"><div class="modal-header"><div class="modal-title">&#x1F4F7; BARCODE SCANNER</div><button class="close-btn" id="scanClose">&times;</button></div><div style="font-size:12px;color:#64748b;margin-bottom:12px;">Point camera at a barcode on any bag</div><div style="position:relative;"><video id="scannerVideo" autoplay playsinline></video><div class="scan-line"></div></div><div id="scanResult" style="margin-top:12px;padding:12px;background:#f8fafc;border-radius:10px;font-size:13px;color:#94a3b8;text-align:center;">Scanning...</div><div id="scanActions" style="margin-top:10px;display:none;"><button id="btnScanAddCart" class="btn-primary" style="width:100%;margin-bottom:8px;">&#x1F6D2; Add to Cart</button><button id="btnScanView" class="btn-outline" style="width:100%;">&#x1F50D; View Product</button></div></div></div>');
+  var scannedProduct=null,stream=null;
+  document.getElementById("scanClose").onclick=function(){if(stream)stream.getTracks().forEach(function(t){t.stop();});try{if(typeof Quagga!=="undefined")Quagga.stop();}catch(e){}document.getElementById("mScan").remove();};
+  navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(function(s){
+    stream=s;
+    var video=document.getElementById("scannerVideo");
+    video.srcObject=s;
+    if(typeof Quagga!=="undefined"){
+      Quagga.init({inputStream:{type:"LiveStream",target:video,constraints:{facingMode:"environment"}},decoder:{readers:["ean_reader","code_128_reader","code_39_reader","upc_reader","upc_e_reader"]}},function(err){if(!err)Quagga.start();});
+      Quagga.onDetected(function(result){
+        var code=result.codeResult.code;
+        var prod=products.find(function(p){return p.barcode===code;});
+        var el=document.getElementById("scanResult");
+        var acts=document.getElementById("scanActions");
+        if(!el||!acts)return;
+        if(prod){scannedProduct=prod;el.innerHTML='<div style="color:#16a34a;font-weight:700;font-size:15px;">&#x2705; Found!</div><div style="margin-top:4px;font-weight:600;">'+prod.name+(prod.color?" - "+prod.color:"")+'</div><div style="font-size:11px;color:#64748b;margin-top:2px;">'+prod.qty+' in stock &middot; '+prod.sku+'</div>';acts.style.display="block";try{Quagga.stop();}catch(e){}}
+        else{el.innerHTML='<div style="color:#f97316;font-weight:700;">Barcode: '+code+'</div><div style="font-size:11px;color:#64748b;margin-top:4px;">Not found in inventory</div>';acts.style.display="none";}
+      });
+    }
+  }).catch(function(){var el=document.getElementById("scanResult");if(el)el.innerHTML='<div style="color:#dc2626;">Camera access denied. Please allow camera in browser settings.</div>';});
+  document.getElementById("btnScanAddCart").onclick=function(){if(!scannedProduct)return;addToCart(scannedProduct);if(stream)stream.getTracks().forEach(function(t){t.stop();});document.getElementById("mScan").remove();activeTab="co";render();showToast(scannedProduct.name+" added to cart!");};
+  document.getElementById("btnScanView").onclick=function(){if(!scannedProduct)return;if(stream)stream.getTracks().forEach(function(t){t.stop();});document.getElementById("mScan").remove();search=scannedProduct.barcode;activeTab="inv";render();};
+}
+
+function addModal(editId){
+  var p=editId?products.find(function(x){return x.id===editId;}):null;
+  if(!p)p={name:"",color:"",series:"Stick Baits",sku:"",barcode:"",price:6.99,pack:8,qty:0,min:24,loc:""};
+  var fields=[{l:"Bait Name *",k:"name",t:"text",ph:"e.g. Stick Bait"},{l:"Barcode",k:"barcode",t:"text",ph:"850070815123"},{l:"SKU",k:"sku",t:"text",ph:"JCB-SB-PH"},{l:"Price ($)",k:"price",t:"number",ph:"6.99"},{l:"Pack Size",k:"pack",t:"number",ph:"8"},{l:"Qty *",k:"qty",t:"number",ph:"0"},{l:"Min Qty *",k:"min",t:"number",ph:"24"},{l:"Location",k:"loc",t:"text",ph:"Shelf A1"}];
+  var finputs=fields.map(function(f){return'<div class="field-wrap"><label class="field-label">'+f.l+'</label><input class="field-input" id="f_'+f.k+'" type="'+f.t+'" placeholder="'+f.ph+'" value="'+(p[f.k]!=null?p[f.k]:"")+'" /></div>';}).join("");
+  var colorOpts=COLORS.map(function(c){return'<option value="'+c.n+'"'+(p.color===c.n?" selected":"")+">"+c.n+"</option>";}).join("");
+  var seriesOpts=SERIES.filter(function(s){return s!=="All";}).map(function(s){return'<option value="'+s+'"'+(p.series===s?" selected":"")+">"+s+"</option>";}).join("");
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mItem"><div class="modal sheet"><div class="modal-header"><div class="modal-title">'+(editId?"EDIT":"NEW VARIANT")+'</div><button class="close-btn" id="mClose">&times;</button></div>'+finputs+'<div class="field-wrap"><label class="field-label">Color</label><select class="field-input" id="f_color"><option value="">No color</option>'+colorOpts+'</select></div><div class="field-wrap"><label class="field-label">Series</label><select class="field-input" id="f_series">'+seriesOpts+'</select></div><button class="btn-primary" id="mSave" style="width:100%;font-size:14px;padding:13px;margin-top:8px;">'+(editId?"Save Changes":"Add Variant")+"</button></div></div>");
+  document.getElementById("mClose").onclick=function(){document.getElementById("mItem").remove();};
+  document.getElementById("mSave").onclick=function(){
+    var name=document.getElementById("f_name").value.trim();
+    var qty=parseInt(document.getElementById("f_qty").value);
+    var min=parseInt(document.getElementById("f_min").value);
+    if(!name||isNaN(qty)||isNaN(min)){showToast("Name, Qty and Min required","err");return;}
+    var item={name:name,barcode:document.getElementById("f_barcode").value.trim(),sku:document.getElementById("f_sku").value.trim(),price:parseFloat(document.getElementById("f_price").value)||0,pack:parseInt(document.getElementById("f_pack").value)||1,qty:qty,min:min,loc:document.getElementById("f_loc").value.trim(),color:document.getElementById("f_color").value,series:document.getElementById("f_series").value};
+    if(editId){
+      var old=products.find(function(p){return p.id===editId;});
+      dbPatch("products","id=eq."+editId,item).then(function(){if(old&&old.qty!==qty)return logHistory(Object.assign({},old,item),old.qty,qty,"edit",currentUser,"Manual edit");}).then(function(){showToast("Updated!");document.getElementById("mItem").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");});
+    }else{
+      var newId=Date.now();
+      dbPost("products",Object.assign({},item,{id:newId})).then(function(){return logHistory(Object.assign({},item,{id:newId}),0,qty,"add",currentUser,"New product added");}).then(function(){showToast("Added!");document.getElementById("mItem").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");});
+    }
+  };
+}
+
+function delModal(id){
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay" id="mDel"><div class="modal"><div style="font-weight:700;font-size:16px;margin-bottom:8px;">Remove Variant?</div><div style="color:#64748b;font-size:13px;margin-bottom:20px;">This permanently removes the product from the database.</div><div style="display:flex;gap:10px;"><button style="flex:1;background:#f1f5f9;border:none;color:#475569;border-radius:10px;padding:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;" id="dCancel">Cancel</button><button style="flex:1;background:#dc2626;border:none;color:#fff;border-radius:10px;padding:12px;font-weight:700;cursor:pointer;font-family:\'DM Sans\',sans-serif;" id="dConfirm">Delete</button></div></div></div>');
+  document.getElementById("dCancel").onclick=function(){document.getElementById("mDel").remove();};
+  document.getElementById("dConfirm").onclick=function(){
+    var prod=products.find(function(p){return p.id===id;});
+    dbDelete("products","id=eq."+id).then(function(){if(prod)return logHistory(prod,prod.qty,0,"delete",currentUser,"Product removed");}).then(function(){showToast("Removed");document.getElementById("mDel").remove();return doRefresh();}).catch(function(){showToast("Error","err");});
+  };
+}
+
+function wire(){
+  document.querySelectorAll(".tab").forEach(function(b){b.onclick=function(){activeTab=b.dataset.tab;render();};});
+  var btnAdd=document.getElementById("btnAdd");if(btnAdd)btnAdd.onclick=function(){addModal();};
+  var btnCO=document.getElementById("btnCO");if(btnCO)btnCO.onclick=function(){activeTab="co";render();};
+  var btnCO2=document.getElementById("btnCO2");if(btnCO2)btnCO2.onclick=function(){addModal();};
+  var btnScan=document.getElementById("btnScan");if(btnScan)btnScan.onclick=function(){openScanner();};
+  var btnR=document.getElementById("btnRefresh");if(btnR)btnR.onclick=function(){btnR.textContent="...";doRefresh().then(function(){btnR.textContent="&#x1F504;";});};
+  var si=document.getElementById("searchInput");if(si)si.oninput=function(e){search=e.target.value;render();};
+  document.querySelectorAll(".series-btn").forEach(function(b){b.onclick=function(){activeSeries=b.dataset.series;render();};});
+  document.querySelectorAll("[data-adj]").forEach(function(b){b.onclick=function(){
+    var id=parseInt(b.dataset.adj),d=parseInt(b.dataset.d);
+    var p=products.find(function(x){return x.id===id;});if(!p)return;
+    var nq=Math.max(0,p.qty+d);
+    products=products.map(function(x){return x.id===id?Object.assign({},x,{qty:nq}):x;});render();
+    dbPatch("products","id=eq."+id,{qty:nq}).then(function(){return logHistory(p,p.qty,nq,d>0?"+":"-",currentUser,"Manual adjustment");}).catch(function(){showToast("Sync error","err");doRefresh();});
+  };});
+  document.querySelectorAll("[data-addcart]").forEach(function(b){b.onclick=function(){
+    var prod=products.find(function(p){return p.id===parseInt(b.dataset.addcart);});
+    if(!prod)return;
+    if(prod.qty===0){showToast("Out of stock","err");return;}
+    addToCart(prod);render();showToast(prod.name+(prod.color?" - "+prod.color:"")+" added to cart!");
+  };});
+  document.querySelectorAll("[data-cartadj]").forEach(function(b){b.onclick=function(){
+    var idx=parseInt(b.dataset.cartadj),d=parseInt(b.dataset.d);
+    var item=cart[idx];if(!item)return;
+    var prod=products.find(function(p){return p.id===item.pid;});
+    item.qty=Math.max(1,item.qty+d);
+    if(prod&&item.qty>prod.qty){item.qty=prod.qty;showToast("Max stock reached");}
+    render();
+  };});
+  document.querySelectorAll("[data-cartrem]").forEach(function(b){b.onclick=function(){cart.splice(parseInt(b.dataset.cartrem),1);render();};});
+  var btnConfirm=document.getElementById("btnConfirmOrder");if(btnConfirm)btnConfirm.onclick=function(){confirmOrder();};
+  var btnClear=document.getElementById("btnClearCart");if(btnClear)btnClear.onclick=function(){cart=[];render();};
+  document.querySelectorAll("[data-edit]").forEach(function(b){b.onclick=function(){addModal(parseInt(b.dataset.edit));};});
+  document.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){delModal(parseInt(b.dataset.del));};});
+  document.querySelectorAll("[data-logf]").forEach(function(b){b.onclick=function(){logFilter=b.dataset.logf;render();};});
+  document.querySelectorAll("[data-histf]").forEach(function(b){b.onclick=function(){histFilter=b.dataset.histf;render();};});
+  document.querySelectorAll("[data-ret]").forEach(function(b){b.onclick=function(){
+    var id=parseInt(b.dataset.ret);var log=logs.find(function(l){return l.id===id;});if(!log)return;
+    dbPatch("logs","id=eq."+id,{ret:TODAY,st:"Returned"}).then(function(){
+      var p=products.find(function(x){return x.id===log.pid;});
+      if(p){var nq=p.qty+log.qty;return dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){return logHistory(p,p.qty,nq,"checkout",currentUser,"Return from "+(log.person||"customer"));});}
+    }).then(function(){showToast("Returned!");return doRefresh();}).catch(function(){showToast("Error","err");});
+  };});
+  var rs=document.getElementById("rngSel");if(rs)rs.onchange=function(e){rng=e.target.value;render();};
+  var rv2=document.getElementById("rvSel");if(rv2)rv2.onchange=function(e){rv=e.target.value;render();};
+  document.querySelectorAll("[data-itype]").forEach(function(b){b.onclick=function(){iType=b.dataset.itype;iPrev=null;iMsg="";render();};});
+  var iTA=document.getElementById("iTA");if(iTA)iTA.oninput=function(e){iText=e.target.value;};
+  var btnPreview=document.getElementById("btnPreview");
+  if(btnPreview)btnPreview.onclick=function(){
+    var lines=iText.trim().split("\n").filter(Boolean);
+    if(!lines.length){iMsg="Paste data first.";iPrev=null;render();return;}
+    var prev=[],um=[];
+    lines.forEach(function(line){
+      var pts=line.split(/[\t,]/).map(function(s){return s.trim().replace(/^"|"$/g,"");});
+      if(pts.length<2)return;
+      var c1=pts[0],c2=pts[1],c3=pts[2];
+      if(iType==="barcodes"){
+        var p=products.find(function(p){return p.sku&&p.sku.toLowerCase()===c1.toLowerCase();});
+        if(!p&&c3)p=products.find(function(p){return p.name.toLowerCase()===c1.toLowerCase()&&(p.color||"").toLowerCase()===c2.toLowerCase();});
+        if(!p)p=products.find(function(p){return p.name.toLowerCase()===c1.toLowerCase();});
+        if(p)prev.push({id:p.id,name:p.name,color:p.color,barcode:c3||c2});else um.push(c1);
+      }else{
+        var qty=parseInt(c3||c2);if(isNaN(qty))return;
+        var p2=products.find(function(p){return p.name.toLowerCase().indexOf(c1.toLowerCase())>=0&&(p.color||"").toLowerCase().indexOf(c2.toLowerCase())>=0;});
+        if(!p2)p2=products.find(function(p){return (p.color||"").toLowerCase().indexOf(c1.toLowerCase())>=0&&p.name.toLowerCase().indexOf(c2.toLowerCase())>=0;});
+        if(p2)prev.push({id:p2.id,name:p2.name,color:p2.color,qty:qty});else um.push(c1+"/"+c2);
+      }
+    });
+    iPrev=prev;iMsg="Matched "+prev.length+(um.length?" - Unmatched: "+um.slice(0,4).join(", ")+(um.length>4?"...":""):"");render();
+  };
+  var btnApply=document.getElementById("btnApply");
+  if(btnApply)btnApply.onclick=function(){
+    if(!iPrev||!iPrev.length)return;
+    var chain=Promise.resolve();
+    iPrev.forEach(function(m){chain=chain.then(function(){
+      if(iType==="barcodes")return dbPatch("products","id=eq."+m.id,{barcode:m.barcode});
+      var p=products.find(function(x){return x.id===m.id;});
+      return dbPatch("products","id=eq."+m.id,{qty:m.qty}).then(function(){if(p)return logHistory(p,p.qty,m.qty,"adjustment",currentUser,"Bulk import update");});
+    });});
+    chain.then(function(){showToast("Applied "+iPrev.length+" updates!");iPrev=null;iText="";iMsg="";return doRefresh();}).catch(function(){showToast("Import error","err");});
+  };
+  var bEI=document.getElementById("btnExpInv");if(bEI)bEI.onclick=function(){exportCSV(products,"jcb-inventory.csv",["name","color","series","sku","barcode","price","pack","qty","min","loc"]);};
+  var bEL=document.getElementById("btnExpLogs");if(bEL)bEL.onclick=function(){exportCSV(logs,"jcb-checkout-log.csv",["name","color","qty","price","ch","person","project","date","ret","st"]);};
+  var bEH=document.getElementById("btnExpHist")||document.getElementById("btnExportHist");if(bEH)bEH.onclick=function(){exportCSV(history,"jcb-history.csv",["product_name","color","change_type","qty_before","qty_after","changed_by","note","changed_at"]);};
+}
+
+boot();
+</script>
+</body>
+</html>
