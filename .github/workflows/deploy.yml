@@ -1,0 +1,22 @@
+name: Deploy to Linode
+
+# Runs automatically every time code is pushed to the main branch
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into server and pull latest code
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 173.255.221.37
+          username: root
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            cd /var/www/jcb-inventory
+            git pull origin main
+            chown -R www-data:www-data /var/www/jcb-inventory
+            echo "Deployed successfully at $(date)"

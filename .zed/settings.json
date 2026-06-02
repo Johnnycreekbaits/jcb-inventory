@@ -1,0 +1,11 @@
+{
+  "agent": {
+    "dock": "right",
+    "default_profile": "JCBData"
+  },
+  "agent_servers": {
+    "claude-acp": {
+      "type": "registry"
+    }
+  }
+}
