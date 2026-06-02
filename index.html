@@ -404,7 +404,7 @@ function openScanner(){
     if(typeof Quagga!=="undefined"){
       Quagga.init({inputStream:{type:"LiveStream",target:video,constraints:{facingMode:"environment"}},decoder:{readers:["ean_reader","code_128_reader","code_39_reader","upc_reader","upc_e_reader"]}},function(err){if(!err)Quagga.start();});
       Quagga.onDetected(function(result){
-        var code=result.codeResult.code;
+        var code=result.codeResult.code.replace(/^0+/,'');
         var prod=products.find(function(p){return p.barcode===code;});
         var el=document.getElementById("scanResult");
         var acts=document.getElementById("scanActions");
