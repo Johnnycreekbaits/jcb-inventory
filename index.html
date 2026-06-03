@@ -219,7 +219,7 @@ function boot(){
     return dbGet("logs","?order=created_at.desc");
   }).then(function(l){
     logs=l;
-    return dbGet("history","?order=changed_at.desc&limit=200");
+    return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());
   }).then(function(h){
     history=h;
     lastSync=Date.now();
@@ -230,12 +230,12 @@ function boot(){
 }
 
 function doRefresh(){
-  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&limit=200");}).then(function(h){history=h;lastSync=Date.now();render();}).catch(function(){});
+  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){history=h;lastSync=Date.now();render();}).catch(function(){});
 }
 setInterval(doRefresh,10000);
 
 function showUserPicker(){
-  document.getElementById("app").innerHTML='<div style="max-width:400px;margin:80px auto;padding:24px;background:#fff;border-radius:18px;box-shadow:0 4px 24px rgba(0,0,0,.1);"><div style="font-family:\'Bebas Neue\',cursive;font-size:28px;color:#ea580c;margin-bottom:4px;">JOHNNY CREEK BAITS</div><div style="font-size:13px;color:#64748b;margin-bottom:20px;">Who is using this device?</div><div style="display:flex;flex-direction:column;gap:10px;"><button onclick="setUser(\'Thomas\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Thomas</button><button onclick="setUser(\'Team Member 2\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Team Member 2</button><button onclick="setUser(\'Team Member 3\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Team Member 3</button><div style="margin-top:8px;"><label style="font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-bottom:6px;">OR TYPE YOUR NAME</label><div style="display:flex;gap:8px;"><input id="customName" placeholder="Your name..." style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;font-size:13px;outline:none;"/><button onclick="setUser(document.getElementById(\'customName\').value)" style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px;">Go</button></div></div></div></div>';
+  document.getElementById("app").innerHTML='<div style="max-width:400px;margin:80px auto;padding:24px;background:#fff;border-radius:18px;box-shadow:0 4px 24px rgba(0,0,0,.1);"><div style="font-family:\'Bebas Neue\',cursive;font-size:28px;color:#ea580c;margin-bottom:4px;">JOHNNY CREEK BAITS</div><div style="font-size:13px;color:#64748b;margin-bottom:20px;">Who is using this device?</div><div style="display:flex;flex-direction:column;gap:10px;"><button onclick="setUser(\'Thomas\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Thomas</button><button onclick="setUser(\'Mike\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Mike</button><button onclick="setUser(\'Greg\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Greg</button><div style="margin-top:8px;"><label style="font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-bottom:6px;">OR TYPE YOUR NAME</label><div style="display:flex;gap:8px;"><input id="customName" placeholder="Your name..." style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;font-size:13px;outline:none;"/><button onclick="setUser(document.getElementById(\'customName\').value)" style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px;">Go</button></div></div></div></div>';
 }
 
 function setUser(name){if(!name||!name.trim())return;currentUser=name.trim();localStorage.setItem("jcb_user",currentUser);render();}
@@ -358,7 +358,7 @@ function histHTML(){
   var typeColors={checkout:"#eff6ff",adjustment:"#fffbeb","a+":"#f0fdf4","a-":"#fef2f2",add:"#f0fdf4",edit:"#fffbeb","delete":"#fef2f2"};
   var typeText={checkout:"#2563eb",adjustment:"#d97706","a+":"#16a34a","a-":"#dc2626",add:"#16a34a",edit:"#d97706","delete":"#dc2626"};
   var cards=vis.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;"><div style="font-size:36px;">&#x1F4CB;</div><div style="margin-top:8px;">No history yet</div></div>':vis.map(function(h){var diff=(h.qty_after||0)-(h.qty_before||0);var diffStr=diff>0?"+"+diff:String(diff);var diffColor=diff>0?"#16a34a":diff<0?"#dc2626":"#64748b";var bg=typeColors[h.change_type]||"#f1f5f9";var tc=typeText[h.change_type]||"#64748b";return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:13px;">'+(h.product_name||"")+(h.color?" &mdash; "+h.color:"")+'</span><span class="hist-badge" style="background:'+bg+';color:'+tc+';">'+h.change_type+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">&#x1F464; <strong>'+(h.changed_by||"Unknown")+"</strong>"+(h.note?" &middot; "+h.note:"")+'</div></div><div style="text-align:right;flex-shrink:0;margin-left:8px;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:'+diffColor+';">'+diffStr+'</div><div style="font-size:9px;color:#94a3b8;">'+(h.qty_before||0)+"&rarr;"+(h.qty_after||0)+'</div></div></div><div style="font-size:10px;color:#94a3b8;">'+fmtDate(h.changed_at)+"</div></div>";}).join("");
-  return'<div class="section-title">INVENTORY HISTORY</div><div class="section-sub">Every change with who made it and when</div><div class="filter-bar">'+["All","checkout","adjustment","add","edit","delete"].map(function(f){return'<button class="filter-btn'+(histFilter===f?" active":"")+'" data-histf="'+f+'">'+f+"</button>";}).join("")+'</div><button class="btn-outline" id="btnExportHist" style="width:100%;margin-bottom:14px;">&#x2B07;&#xFE0F; Export History CSV</button>'+cards;
+  return'<div class="section-title">INVENTORY HISTORY</div><div class="section-sub">Every change with who made it and when &middot; last 30 days</div><div class="filter-bar">'+["All","checkout","adjustment","add","edit","delete"].map(function(f){return'<button class="filter-btn'+(histFilter===f?" active":"")+'" data-histf="'+f+'">'+f+"</button>";}).join("")+'</div><button class="btn-outline" id="btnExportHist" style="width:100%;margin-bottom:14px;">&#x2B07;&#xFE0F; Export History CSV</button>'+cards;
 }
 
 function repHTML(){
@@ -445,7 +445,18 @@ function addModal(editId){
     var item={name:name,barcode:document.getElementById("f_barcode").value.trim(),sku:document.getElementById("f_sku").value.trim(),price:parseFloat(document.getElementById("f_price").value)||0,pack:parseInt(document.getElementById("f_pack").value)||1,qty:qty,min:min,loc:document.getElementById("f_loc").value.trim(),color:colorVal,series:document.getElementById("f_series").value};
     if(editId){
       var old=products.find(function(p){return p.id===editId;});
-      dbPatch("products","id=eq."+editId,item).then(function(){if(old&&old.qty!==qty)return logHistory(Object.assign({},old,item),old.qty,qty,"edit",currentUser,"Manual edit");}).then(function(){showToast("Updated!");document.getElementById("mItem").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");});
+      dbPatch("products","id=eq."+editId,item).then(function(){
+        if(!old)return;
+        var changes=[];
+        if((old.name||"")!==(item.name||""))changes.push("name: "+old.name+" → "+item.name);
+        if((old.color||"")!==(item.color||""))changes.push("color: "+(old.color||"none")+" → "+(item.color||"none"));
+        if(Number(old.price||0)!==Number(item.price||0))changes.push("price: $"+old.price+" → $"+item.price);
+        if(Number(old.pack||1)!==Number(item.pack||1))changes.push("pack: "+old.pack+" → "+item.pack);
+        if((old.loc||"")!==(item.loc||""))changes.push("loc: "+(old.loc||"")+" → "+(item.loc||""));
+        if((old.sku||"")!==(item.sku||""))changes.push("sku: "+(old.sku||"")+" → "+(item.sku||""));
+        if(old.qty!==qty)changes.push("qty: "+old.qty+" → "+qty);
+        if(changes.length>0)return logHistory(Object.assign({},old,item),old.qty,qty,"edit",currentUser,changes.join("; "));
+      }).then(function(){showToast("Updated!");document.getElementById("mItem").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");});
     }else{
       var newId=Date.now();
       dbPost("products",Object.assign({},item,{id:newId})).then(function(){return logHistory(Object.assign({},item,{id:newId}),0,qty,"add",currentUser,"New product added");}).then(function(){showToast("Added!");document.getElementById("mItem").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");});
