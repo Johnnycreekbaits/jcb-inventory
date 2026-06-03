@@ -274,9 +274,11 @@ function confirmOrder(){
       chain=chain.then(function(){
         var prod=products.find(function(p){return p.id===item.pid;});
         if(!prod)return;
-        var nq=Math.max(0,prod.qty-item.qty);
+        var oldQty=prod.qty;
+        var nq=Math.max(0,oldQty-item.qty);
+        prod.qty=nq;
         return dbPatch("products","id=eq."+item.pid,{qty:nq}).then(function(){
-          return logHistory(prod,prod.qty,nq,"checkout",currentUser,"Order for "+person+" via "+channel+(project?" - "+project:""));
+          return logHistory(prod,oldQty,nq,"checkout",currentUser,"Order for "+person+" via "+channel+(project?" - "+project:""));
         });
       });
     });
