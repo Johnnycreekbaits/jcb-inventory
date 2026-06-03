@@ -263,8 +263,9 @@ function confirmOrder(){
   var totalVal=cart.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
   var first=cart[0];
   var cartCopy=cart.slice();
-  dbGet("logs","?select=id").then(function(allLogs){
-    var orderNum=String((allLogs?allLogs.length:0)+1).padStart(4,"0");
+  dbGet("logs","?select=name&order=id.desc&limit=1").then(function(allLogs){
+    var last=allLogs&&allLogs.length>0&&allLogs[0].name?parseInt(allLogs[0].name.replace("ORD-",""),10)||0:0;
+    var orderNum=String(last+1).padStart(4,"0");
     var orderLabel="ORD-"+orderNum;
     return dbPost("logs",{id:Date.now(),name:orderLabel,color:"",pid:first.pid,qty:totalQty,price:totalQty>0?totalVal/totalQty:0,ch:channel,person:person,project:project,date:date,items:JSON.stringify(cartCopy),ret:null,st:"Out"});
   }).then(function(){
