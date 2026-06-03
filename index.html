@@ -193,7 +193,7 @@ var CHANNELS=["Retail","Tournament","Wholesale","Online","Trade Show","Sample/Pr
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 var TODAY=new Date().toISOString().slice(0,10);
 
-var products=[],logs=[],history=[];
+var products=[],logs=[],auditLog=[];
 var activeTab="inv",search="",activeSeries="All",logFilter="All",histFilter="All";
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
 var lastSync=null,cart=[],currentUser=localStorage.getItem("jcb_user")||"";
@@ -221,7 +221,7 @@ function boot(){
     logs=l;
     return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());
   }).then(function(h){
-    history=h;
+    auditLog=h;
     lastSync=Date.now();
     if(!currentUser){showUserPicker();}else{render();}
   }).catch(function(e){
@@ -230,7 +230,7 @@ function boot(){
 }
 
 function doRefresh(){
-  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){history=h;lastSync=Date.now();render();}).catch(function(){});
+  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;lastSync=Date.now();render();}).catch(function(){});
 }
 setInterval(doRefresh,10000);
 
@@ -354,7 +354,7 @@ function coHTML(){
 }
 
 function histHTML(){
-  var vis=histFilter==="All"?history:history.filter(function(h){return h.change_type===histFilter;});
+  var vis=histFilter==="All"?auditLog:auditLog.filter(function(h){return h.change_type===histFilter;});
   var typeColors={checkout:"#eff6ff",adjustment:"#fffbeb","a+":"#f0fdf4","a-":"#fef2f2",add:"#f0fdf4",edit:"#fffbeb","delete":"#fef2f2"};
   var typeText={checkout:"#2563eb",adjustment:"#d97706","a+":"#16a34a","a-":"#dc2626",add:"#16a34a",edit:"#d97706","delete":"#dc2626"};
   var cards=vis.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;"><div style="font-size:36px;">&#x1F4CB;</div><div style="margin-top:8px;">No history yet</div></div>':vis.map(function(h){var diff=(h.qty_after||0)-(h.qty_before||0);var diffStr=diff>0?"+"+diff:String(diff);var diffColor=diff>0?"#16a34a":diff<0?"#dc2626":"#64748b";var bg=typeColors[h.change_type]||"#f1f5f9";var tc=typeText[h.change_type]||"#64748b";return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:13px;">'+(h.product_name||"")+(h.color?" &mdash; "+h.color:"")+'</span><span class="hist-badge" style="background:'+bg+';color:'+tc+';">'+h.change_type+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">&#x1F464; <strong>'+(h.changed_by||"Unknown")+"</strong>"+(h.note?" &middot; "+h.note:"")+'</div></div><div style="text-align:right;flex-shrink:0;margin-left:8px;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:'+diffColor+';">'+diffStr+'</div><div style="font-size:9px;color:#94a3b8;">'+(h.qty_before||0)+"&rarr;"+(h.qty_after||0)+'</div></div></div><div style="font-size:10px;color:#94a3b8;">'+fmtDate(h.changed_at)+"</div></div>";}).join("");
@@ -568,7 +568,7 @@ function wire(){
   };
   var bEI=document.getElementById("btnExpInv");if(bEI)bEI.onclick=function(){exportCSV(products,"jcb-inventory.csv",["name","color","series","sku","barcode","price","pack","qty","min","loc"]);};
   var bEL=document.getElementById("btnExpLogs");if(bEL)bEL.onclick=function(){exportCSV(logs,"jcb-checkout-log.csv",["name","color","qty","price","ch","person","project","date","ret","st"]);};
-  var bEH=document.getElementById("btnExpHist")||document.getElementById("btnExportHist");if(bEH)bEH.onclick=function(){exportCSV(history,"jcb-history.csv",["product_name","color","change_type","qty_before","qty_after","changed_by","note","changed_at"]);};
+  var bEH=document.getElementById("btnExpHist")||document.getElementById("btnExportHist");if(bEH)bEH.onclick=function(){exportCSV(auditLog,"jcb-history.csv",["product_name","color","change_type","qty_before","qty_after","changed_by","note","changed_at"]);};
 }
 
 boot();
