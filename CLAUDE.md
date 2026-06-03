@@ -5,6 +5,8 @@ A self-contained single-file inventory management app (`index.html`) for Johnny 
 - **Repo:** https://github.com/Johnnycreekbaits/jcb-inventory
 - **Stack:** Pure HTML/CSS/JS — no build step, no framework, no dependencies except Google Fonts
 - **Hosting:** GitHub Pages (live from `main` branch) + Linode VPS (`173.255.221.37`)
+- **Live URL (HTTPS):** https://johnnycreekbaits.github.io/jcb-inventory/
+- **Linode URL (HTTP only):** http://173.255.221.37 — use GitHub Pages URL instead to avoid "Not Secure" warning
 - **Status:** Active — 2 open issues, last push today (2026-06-02), no README yet
 
 ## Credentials
