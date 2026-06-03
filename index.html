@@ -480,7 +480,7 @@ function wire(){
   var btnCO2=document.getElementById("btnCO2");if(btnCO2)btnCO2.onclick=function(){addModal();};
   var btnScan=document.getElementById("btnScan");if(btnScan)btnScan.onclick=function(){openScanner();};
   var btnR=document.getElementById("btnRefresh");if(btnR)btnR.onclick=function(){btnR.textContent="...";doRefresh().then(function(){btnR.textContent="&#x1F504;";});};
-  var si=document.getElementById("searchInput");if(si)si.oninput=function(e){search=e.target.value;render();};
+  var si=document.getElementById("searchInput");if(si)si.oninput=function(e){var pos=e.target.selectionStart;search=e.target.value;render();var ns=document.getElementById("searchInput");if(ns){ns.focus();ns.setSelectionRange(pos,pos);}};
   document.querySelectorAll(".series-btn").forEach(function(b){b.onclick=function(){activeSeries=b.dataset.series;render();};});
   // Color search tabs
   document.querySelectorAll("[data-colorsearch]").forEach(function(b){b.onclick=function(){
