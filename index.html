@@ -364,17 +364,17 @@ function coHTML(){
       itemsData.map(function(item){return'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;"><div style="display:flex;align-items:center;gap:5px;">'+dotHtml(item.color||"")+'<span>'+item.name+(item.color?" &mdash; "+item.color:"")+'</span></div><div style="font-weight:700;color:#ea580c;">&times;'+item.qty+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">$'+(item.qty*(item.price||0)).toFixed(2)+'</span></div></div>';}).join("")+
       '</div>';
     }
-    return'<div class="log-card '+(l.st==="Out"?"out":"returned")+'" data-logid="'+l.id+'" style="cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:14px;">'+l.name+'</span>'+'<span style="background:'+(l.st==="Out"?"#eff6ff":"#dcfce7")+';color:'+(l.st==="Out"?"#2563eb":"#16a34a")+';padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">'+(l.st==="Out"?"OUT":"BACK")+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">'+(l.ch?'<span style="margin-right:10px;">&#x1F3EA; '+l.ch+"</span>":"")+(l.person?'<span style="margin-right:10px;">&#x1F464; '+l.person+"</span>":"")+(l.project?'<span style="margin-right:10px;">&#x1F4CB; '+l.project+"</span>":"")+(ordState?'<span>&#x1F4CD; '+ordState+"</span>":"")+'</div></div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;margin-left:8px;">&times;'+l.qty+'</div></div><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-size:10px;color:#94a3b8;">'+l.date+(l.ret?'<span style="color:#16a34a;"> &rarr; back '+l.ret+"</span>":'<span style="color:'+(days>7?"#dc2626":"#94a3b8")+'"> &middot; '+days+"d out"+(days>7?" &#x26A0;&#xFE0F;":"")+"</span>")+(l.price>0?" &middot; $"+(l.qty*l.price).toFixed(2):"")+"</div>"+(l.st==="Out"?'<button class="return-btn" data-ret="'+l.id+'">&#x21A9; Return</button>':"")+"</div>"+itemsHTML+"</div>";
+    return'<div class="log-card '+(l.st==="Out"?"out":"returned")+'" data-logid="'+l.id+'" style="cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:14px;">'+l.name+'</span>'+'<span style="background:'+(l.st==="Out"?"#eff6ff":"#dcfce7")+';color:'+(l.st==="Out"?"#2563eb":"#16a34a")+';padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">'+(l.st==="Out"?"OUT":"BACK")+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">'+(l.ch?'<span style="margin-right:10px;">&#x1F3EA; '+l.ch+"</span>":"")+(l.person?'<span style="margin-right:10px;">&#x1F464; '+l.person+"</span>":"")+(l.project?'<span style="margin-right:10px;">&#x1F4CB; '+l.project+"</span>":"")+(ordState?'<span>&#x1F4CD; '+ordState+"</span>":"")+'</div></div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;margin-left:8px;">&times;'+l.qty+'</div></div><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-size:10px;color:#94a3b8;">'+l.date+(l.ret?'<span style="color:#16a34a;"> &rarr; back '+l.ret+"</span>":'<span style="color:'+(days>7?"#dc2626":"#94a3b8")+'"> &middot; '+days+"d out"+(days>7?" &#x26A0;&#xFE0F;":"")+"</span>")+(l.price>0?" &middot; $"+(l.qty*l.price).toFixed(2):"")+"</div>"+'<div style="display:flex;gap:6px;">'+(l.st==="Out"?'<button class="return-btn" data-ret="'+l.id+'">&#x21A9; Return</button>':'')+'<button style="background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;" data-editorder="'+l.id+'">&#x270F;&#xFE0F; Edit</button></div>'+"</div>"+itemsHTML+"</div>";
   }).join("");
   return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><div><div class="section-title">CHECKOUT</div><div class="section-sub">'+logs.filter(function(l){return l.st==="Out";}).length+' units currently out</div></div><button class="btn-primary" id="btnCO2">&#x1F3A3; New Order</button></div>'+cartSection+'<div class="filter-bar">'+["All","Out","Returned"].map(function(f){return'<button class="filter-btn'+(logFilter===f?" active":"")+'" data-logf="'+f+'">'+f+"</button>";}).join("")+"</div>"+logCards;
 }
 
 function histHTML(){
   var vis=histFilter==="All"?auditLog:auditLog.filter(function(h){return h.change_type===histFilter;});
-  var typeColors={checkout:"#eff6ff",adjustment:"#fffbeb","a+":"#f0fdf4","a-":"#fef2f2",add:"#f0fdf4",edit:"#fffbeb","delete":"#fef2f2"};
-  var typeText={checkout:"#2563eb",adjustment:"#d97706","a+":"#16a34a","a-":"#dc2626",add:"#16a34a",edit:"#d97706","delete":"#dc2626"};
+  var typeColors={checkout:"#eff6ff",adjustment:"#fffbeb","a+":"#f0fdf4","a-":"#fef2f2",add:"#f0fdf4",edit:"#fffbeb","delete":"#fef2f2","return":"#dcfce7","order-edit":"#faf5ff"};
+  var typeText={checkout:"#2563eb",adjustment:"#d97706","a+":"#16a34a","a-":"#dc2626",add:"#16a34a",edit:"#d97706","delete":"#dc2626","return":"#16a34a","order-edit":"#7c3aed"};
   var cards=vis.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;"><div style="font-size:36px;">&#x1F4CB;</div><div style="margin-top:8px;">No history yet</div></div>':vis.map(function(h){var diff=(h.qty_after||0)-(h.qty_before||0);var diffStr=diff>0?"+"+diff:String(diff);var diffColor=diff>0?"#16a34a":diff<0?"#dc2626":"#64748b";var bg=typeColors[h.change_type]||"#f1f5f9";var tc=typeText[h.change_type]||"#64748b";return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:13px;">'+(h.product_name||"")+(h.color?" &mdash; "+h.color:"")+'</span><span class="hist-badge" style="background:'+bg+';color:'+tc+';">'+h.change_type+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">&#x1F464; <strong>'+(h.changed_by||"Unknown")+"</strong>"+(h.note?" &middot; "+h.note:"")+'</div></div><div style="text-align:right;flex-shrink:0;margin-left:8px;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:'+diffColor+';">'+diffStr+'</div><div style="font-size:9px;color:#94a3b8;">'+(h.qty_before||0)+"&rarr;"+(h.qty_after||0)+'</div></div></div><div style="font-size:10px;color:#94a3b8;">'+fmtDate(h.changed_at)+"</div></div>";}).join("");
-  return'<div class="section-title">INVENTORY HISTORY</div><div class="section-sub">Every change with who made it and when &middot; last 30 days</div><div class="filter-bar">'+["All","checkout","adjustment","add","edit","delete"].map(function(f){return'<button class="filter-btn'+(histFilter===f?" active":"")+'" data-histf="'+f+'">'+f+"</button>";}).join("")+'</div><button class="btn-outline" id="btnExportHist" style="width:100%;margin-bottom:14px;">&#x2B07;&#xFE0F; Export History CSV</button>'+cards;
+  return'<div class="section-title">INVENTORY HISTORY</div><div class="section-sub">Every change with who made it and when &middot; last 30 days</div><div class="filter-bar">'+["All","checkout","adjustment","add","edit","delete","return","order-edit"].map(function(f){return'<button class="filter-btn'+(histFilter===f?" active":"")+'" data-histf="'+f+'">'+f+"</button>";}).join("")+'</div><button class="btn-outline" id="btnExportHist" style="width:100%;margin-bottom:14px;">&#x2B07;&#xFE0F; Export History CSV</button>'+cards;
 }
 
 function repHTML(){
@@ -503,6 +503,53 @@ function logDetailModal(id){
   document.getElementById("mLogDetail").onclick=function(e){if(e.target===this)this.remove();};
 }
 
+function editOrderModal(id){
+  var log=logs.find(function(l){return l.id===id;});if(!log)return;
+  var _ord=parseOrderItems(log.items);
+  var origItems=_ord.items;
+  var editItems=origItems.map(function(i){return Object.assign({},i);});
+  var ordState=_ord.state;
+  var itemsEditHTML=editItems.length>0
+    ?'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin:14px 0 8px;">Items</div>'
+    +editItems.map(function(item,idx){return'<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;"><div style="flex:1;font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px;">'+dotHtml(item.color||"")+'<span>'+item.name+(item.color?' &mdash; '+item.color:'')+'</span></div><input type="number" id="eqty_'+idx+'" value="'+item.qty+'" min="0" style="width:64px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:15px;color:#ea580c;font-weight:700;text-align:center;outline:none;"/></div>';}).join("")
+    :'';
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mEditOrder"><div class="modal sheet"><div class="modal-header"><div class="modal-title">EDIT '+log.name+'</div><button class="close-btn" id="mEOClose">&times;</button></div><div class="field-wrap"><label class="field-label">Who is this for?</label><input class="field-input" id="ePerson" value="'+(log.person||'')+'"/></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><div style="flex:1;min-width:140px;"><label class="field-label">Channel</label><select class="field-input" id="eChannel">'+CHANNELS.map(function(c){return'<option'+(c===(log.ch||'')?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div><div style="flex:0 0 80px;"><label class="field-label">State</label><input class="field-input" id="eState" placeholder="MD" maxlength="2" style="text-transform:uppercase;letter-spacing:.1em;" value="'+ordState+'"/></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;"><label class="field-label">Project / Order #</label><input class="field-input" id="eProject" value="'+(log.project||'')+'"/></div><div style="flex:1;min-width:120px;"><label class="field-label">Date</label><input class="field-input" type="date" id="eDate" value="'+(log.date||TODAY)+'"/></div></div>'+itemsEditHTML+'<button class="btn-primary" id="btnSaveOrder" style="width:100%;margin-top:16px;font-size:14px;padding:13px;">Save Changes</button></div></div>');
+  document.getElementById("mEOClose").onclick=function(){document.getElementById("mEditOrder").remove();};
+  document.getElementById("mEditOrder").onclick=function(e){if(e.target===this)this.remove();};
+  document.getElementById("btnSaveOrder").onclick=function(){
+    var newPerson=document.getElementById("ePerson").value.trim();
+    var newChannel=document.getElementById("eChannel").value;
+    var newProject=document.getElementById("eProject").value.trim();
+    var newDate=document.getElementById("eDate").value;
+    var newState=(document.getElementById("eState").value||"").toUpperCase();
+    editItems.forEach(function(item,idx){var inp=document.getElementById("eqty_"+idx);if(inp)item.qty=Math.max(0,parseInt(inp.value)||0);});
+    var changes=[];
+    if(newPerson!==(log.person||""))changes.push("person: "+(log.person||"—")+" → "+newPerson);
+    if(newChannel!==(log.ch||""))changes.push("channel: "+(log.ch||"—")+" → "+newChannel);
+    if(newProject!==(log.project||""))changes.push("project: "+(log.project||"—")+" → "+(newProject||"—"));
+    if(newDate!==log.date)changes.push("date: "+log.date+" → "+newDate);
+    if(newState!==ordState)changes.push("state: "+(ordState||"—")+" → "+(newState||"—"));
+    var updatedItems=editItems.map(function(item){var p=products.find(function(x){return x.name===item.name&&(x.color||"")===(item.color||"");});return Object.assign({},item,{price:getChannelPrice(p||{price:item.price,pack:8},newChannel)});});
+    var newTotalQty=updatedItems.reduce(function(s,i){return s+i.qty;},0);
+    var newTotalVal=updatedItems.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
+    var chain=Promise.resolve();
+    origItems.forEach(function(orig,idx){
+      var updated=editItems[idx];if(!updated)return;
+      var qtyDiff=updated.qty-orig.qty;if(qtyDiff===0)return;
+      chain=chain.then(function(){
+        var p=products.find(function(x){return x.name===orig.name&&(x.color||"")===(orig.color||"");});if(!p)return;
+        var oldInv=p.qty;var newInv=Math.max(0,oldInv-qtyDiff);
+        products=products.map(function(x){return x.id===p.id?Object.assign({},x,{qty:newInv}):x;});
+        changes.push(orig.name+(orig.color?" - "+orig.color:"")+" qty: "+orig.qty+" → "+updated.qty);
+        return dbPatch("products","id=eq."+p.id,{qty:newInv}).then(function(){return logHistory(p,oldInv,newInv,"order-edit",currentUser,log.name+" item qty adjusted");});
+      });
+    });
+    chain=chain.then(function(){return dbPatch("logs","id=eq."+id,{person:newPerson,ch:newChannel,project:newProject,date:newDate,qty:newTotalQty,price:newTotalQty>0?newTotalVal/newTotalQty:0,items:JSON.stringify({state:newState,items:updatedItems})});});
+    chain=chain.then(function(){if(!changes.length)return;return logHistory({id:id,name:log.name,color:""},0,0,"order-edit",currentUser,log.name+" edited — "+changes.join("; "));});
+    chain.then(function(){showToast("Order updated!");document.getElementById("mEditOrder").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");});
+  };
+}
+
 function wire(){
   document.querySelectorAll(".tab").forEach(function(b){b.onclick=function(){activeTab=b.dataset.tab;render();};});
   var btnAdd=document.getElementById("btnAdd");if(btnAdd)btnAdd.onclick=function(){addModal();};
@@ -551,7 +598,8 @@ function wire(){
   document.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){delModal(parseInt(b.dataset.del));};});
   document.querySelectorAll("[data-logf]").forEach(function(b){b.onclick=function(){logFilter=b.dataset.logf;render();};});
   document.querySelectorAll("[data-histf]").forEach(function(b){b.onclick=function(){histFilter=b.dataset.histf;render();};});
-  document.querySelectorAll(".log-card[data-logid]").forEach(function(card){card.onclick=function(e){if(e.target.closest("[data-ret]"))return;logDetailModal(parseInt(card.dataset.logid));};});
+  document.querySelectorAll(".log-card[data-logid]").forEach(function(card){card.onclick=function(e){if(e.target.closest("[data-ret]")||e.target.closest("[data-editorder]"))return;logDetailModal(parseInt(card.dataset.logid));};});
+  document.querySelectorAll("[data-editorder]").forEach(function(b){b.onclick=function(e){e.stopPropagation();editOrderModal(parseInt(b.dataset.editorder));};});
   document.querySelectorAll("[data-ret]").forEach(function(b){b.onclick=function(e){e.stopPropagation();
     var id=parseInt(b.dataset.ret);var log=logs.find(function(l){return l.id===id;});if(!log)return;
     dbPatch("logs","id=eq."+id,{ret:TODAY,st:"Returned"}).then(function(){
