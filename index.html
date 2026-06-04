@@ -191,17 +191,25 @@ var COLORS=[{n:"Purple Haze",h:"#7c3aed"},{n:"Midnight Blue",h:"#1e3a8a"},{n:"Bl
 function saveCustomColor(n){if(!n||COLORS.find(function(c){return c.n===n;}))return;COLORS.push({n:n,h:"#94a3b8"});var saved=JSON.parse(localStorage.getItem("jcb_custom_colors")||"[]");if(!saved.includes(n)){saved.push(n);localStorage.setItem("jcb_custom_colors",JSON.stringify(saved));}}
 (function(){JSON.parse(localStorage.getItem("jcb_custom_colors")||"[]").forEach(function(n){if(n&&!COLORS.find(function(c){return c.n===n;}))COLORS.push({n:n,h:"#94a3b8"});});})();
 var SERIES=["All","Stick Baits","Nekos","Craws","Baby Hawgs","Finesse Worms","Soft Jerk","Paddle Tail","Swim Bait","Terp Minnow","Glidebait","JC Walker","J-Rat","Bundles","Apparel"];
-var CHANNELS=["Retail","Tournament","Wholesale","Online","Trade Show","Sample/Promo","Internal"];
+var CHANNELS=["Retail","Tournament","Wholesale","Distribution","Online","Trade Show","Sample/Promo","Internal"];
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 var TODAY=new Date().toISOString().slice(0,10);
 
 var products=[],logs=[],auditLog=[];
 var activeTab="inv",search="",activeSeries="All",logFilter="All",histFilter="All";
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
-var lastSync=null,cart=[],currentUser=localStorage.getItem("jcb_user")||"";
+var lastSync=null,cart=[],currentUser=localStorage.getItem("jcb_user")||"",currentChannel="Retail";
 
 function getStatus(qty,min){if(qty===0)return"Out";if(qty<=min)return"Low";return"OK";}
 var STATUS={OK:{bg:"#dcfce7",tc:"#166534",dot:"#16a34a",label:"In Stock"},Low:{bg:"#fff7ed",tc:"#9a3412",dot:"#ea580c",label:"Low Stock"},Out:{bg:"#fef2f2",tc:"#991b1b",dot:"#dc2626",label:"Out of Stock"}};
+function getChannelPrice(prod,channel){
+  if(channel==="Sample/Promo"||channel==="Internal")return 0;
+  if(prod&&prod.pack>=8&&prod.price>0&&prod.price<=7.50){
+    if(channel==="Wholesale"||channel==="Tournament")return 3.50;
+    if(channel==="Distribution")return 2.80;
+  }
+  return prod?prod.price:0;
+}
 function colorHex(n){var c=COLORS.find(function(c){return c.n===n;});return c?c.h:"#94a3b8";}
 function dotHtml(n,s){s=s||10;if(!n)return"";var h=colorHex(n);var border=(h==="#a8a29e"||h==="#94a3b8")?"1px solid #cbd5e1":"none";return'<span class="color-dot" style="width:'+s+'px;height:'+s+'px;background:'+h+';border:'+border+'"></span>';}
 function showToast(msg,type){var t=document.createElement("div");t.className="toast";t.style.background=type==="err"?"#dc2626":type==="info"?"#2563eb":"#16a34a";t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.remove();},3000);}
@@ -261,10 +269,10 @@ function confirmOrder(){
     var prod=products.find(function(p){return p.id===item.pid;});
     if(!prod||prod.qty<item.qty){showToast("Not enough stock: "+item.name,"err");return;}
   }
-  var totalQty=cart.reduce(function(s,i){return s+i.qty;},0);
-  var totalVal=cart.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
-  var first=cart[0];
-  var cartCopy=cart.slice();
+  var cartCopy=cart.map(function(i){var p=products.find(function(x){return x.id===i.pid;});return Object.assign({},i,{price:getChannelPrice(p||{price:i.price,pack:8},channel)});});
+  var totalQty=cartCopy.reduce(function(s,i){return s+i.qty;},0);
+  var totalVal=cartCopy.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
+  var first=cartCopy[0];
   dbGet("logs","?select=name&order=id.desc&limit=1").then(function(allLogs){
     var last=allLogs&&allLogs.length>0&&allLogs[0].name?parseInt(allLogs[0].name.replace("ORD-",""),10)||0:0;
     var orderNum=String(last+1).padStart(4,"0");
@@ -331,12 +339,12 @@ function invHTML(){
 }
 
 function coHTML(){
-  var cartTotal=cart.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
+  var cartTotal=cart.reduce(function(s,i){var p=products.find(function(x){return x.id===i.pid;});return s+(i.qty*getChannelPrice(p||{price:i.price,pack:8},currentChannel));},0);
   var vis=logFilter==="All"?logs:logs.filter(function(l){return l.st===logFilter;});
   var cartSection="";
   if(cart.length>0){
-    var cartItems=cart.map(function(item,idx){return'<div class="cart-item"><div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">'+dotHtml(item.color)+'<div class="cart-item-name">'+item.name+(item.color?" &mdash; "+item.color:"")+'</div></div><div style="display:flex;align-items:center;gap:6px;"><button class="cart-qty-btn" data-cartadj="'+idx+'" data-d="-1">&minus;</button><span class="cart-qty">'+item.qty+'</span><button class="cart-qty-btn" data-cartadj="'+idx+'" data-d="1">+</button><button class="cart-remove" data-cartrem="'+idx+'">&times;</button></div></div>';}).join("");
-    cartSection='<div class="card" style="border:1px solid #fed7aa;margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:#ea580c;">&#x1F6D2; CURRENT ORDER ('+cart.length+' items)</div><div style="font-size:12px;color:#64748b;">Est. $'+cartTotal.toFixed(2)+'</div></div>'+cartItems+'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;"><label class="field-label">Who is this for?</label><input class="field-input" id="orderPerson" placeholder="Customer / Sales Rep" value="'+(localStorage.getItem("jcb_lastPerson")||"")+'"/></div><div style="flex:1;min-width:140px;"><label class="field-label">Channel</label><select class="field-input" id="orderChannel">'+CHANNELS.map(function(c){return"<option>"+c+"</option>";}).join("")+'</select></div></div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;"><label class="field-label">Project / Order #</label><input class="field-input" id="orderProject" placeholder="e.g. Bass Pro 1234"/></div><div style="flex:1;min-width:120px;"><label class="field-label">Date</label><input class="field-input" type="date" id="orderDate" value="'+TODAY+'"/></div></div><div style="margin-top:12px;display:flex;gap:8px;"><button class="btn-gray" id="btnClearCart" style="flex:1;">Clear</button><button class="btn-primary" id="btnConfirmOrder" style="flex:2;font-size:14px;padding:12px;">Confirm Order ('+cart.reduce(function(s,i){return s+i.qty;},0)+' bags)</button></div></div>';
+    var cartItems=cart.map(function(item,idx){var p=products.find(function(x){return x.id===item.pid;});var cp=getChannelPrice(p||{price:item.price,pack:8},currentChannel);return'<div class="cart-item"><div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">'+dotHtml(item.color)+'<div class="cart-item-name">'+item.name+(item.color?" &mdash; "+item.color:"")+'</div></div><div style="display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:#ea580c;font-weight:700;min-width:36px;text-align:right;">$'+cp.toFixed(2)+'</span><button class="cart-qty-btn" data-cartadj="'+idx+'" data-d="-1">&minus;</button><span class="cart-qty">'+item.qty+'</span><button class="cart-qty-btn" data-cartadj="'+idx+'" data-d="1">+</button><button class="cart-remove" data-cartrem="'+idx+'">&times;</button></div></div>';}).join("");
+    cartSection='<div class="card" style="border:1px solid #fed7aa;margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:#ea580c;">&#x1F6D2; CURRENT ORDER ('+cart.length+' items)</div><div style="font-size:12px;color:#64748b;">Est. $'+cartTotal.toFixed(2)+'</div></div>'+cartItems+'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;"><label class="field-label">Who is this for?</label><input class="field-input" id="orderPerson" placeholder="Customer / Sales Rep" value="'+(localStorage.getItem("jcb_lastPerson")||"")+'"/></div><div style="flex:1;min-width:140px;"><label class="field-label">Channel</label><select class="field-input" id="orderChannel">'+CHANNELS.map(function(c){return'<option'+(c===currentChannel?' selected':'')+'>'+c+'</option>';}).join("")+'</select></div></div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:140px;"><label class="field-label">Project / Order #</label><input class="field-input" id="orderProject" placeholder="e.g. Bass Pro 1234"/></div><div style="flex:1;min-width:120px;"><label class="field-label">Date</label><input class="field-input" type="date" id="orderDate" value="'+TODAY+'"/></div></div><div style="margin-top:12px;display:flex;gap:8px;"><button class="btn-gray" id="btnClearCart" style="flex:1;">Clear</button><button class="btn-primary" id="btnConfirmOrder" style="flex:2;font-size:14px;padding:12px;">Confirm Order ('+cart.reduce(function(s,i){return s+i.qty;},0)+' bags)</button></div></div>';
   }else{
     cartSection='<div class="card" style="background:#fff7ed;border:1px solid #fed7aa;margin-bottom:16px;text-align:center;padding:20px;"><div style="font-size:24px;margin-bottom:8px;">&#x1F6D2;</div><div style="font-weight:600;color:#92400e;margin-bottom:4px;">Cart is empty</div><div style="font-size:12px;color:#b45309;">Tap + Cart on any product in Stock tab</div></div>';
   }
@@ -532,6 +540,7 @@ function wire(){
       if(p){var nq=p.qty+log.qty;return dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){return logHistory(p,p.qty,nq,"checkout",currentUser,"Return from "+(log.person||"customer"));});}
     }).then(function(){showToast("Returned!");return doRefresh();}).catch(function(){showToast("Error","err");});
   };});
+  var oc=document.getElementById("orderChannel");if(oc)oc.onchange=function(e){var sp=document.getElementById("orderPerson")?document.getElementById("orderPerson").value:"";var sj=document.getElementById("orderProject")?document.getElementById("orderProject").value:"";var sd=document.getElementById("orderDate")?document.getElementById("orderDate").value:TODAY;currentChannel=e.target.value;render();var rp=document.getElementById("orderPerson");if(rp)rp.value=sp;var rj=document.getElementById("orderProject");if(rj)rj.value=sj;var rd=document.getElementById("orderDate");if(rd)rd.value=sd;};
   var rs=document.getElementById("rngSel");if(rs)rs.onchange=function(e){rng=e.target.value;render();};
   var rv2=document.getElementById("rvSel");if(rv2)rv2.onchange=function(e){rv=e.target.value;render();};
   document.querySelectorAll("[data-itype]").forEach(function(b){b.onclick=function(){iType=b.dataset.itype;iPrev=null;iMsg="";render();};});
