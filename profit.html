@@ -80,7 +80,7 @@ function dbPost(t,b){return fetch(SB_URL+"/rest/v1/"+t,{method:"POST",headers:Ob
 function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
 
 var BOM={softPlastic:1.04,glide:44.25,walker:6.31};
-var EXP_CATS=["Raw Materials","Packaging & Supplies","Equipment & Molds","Trade Shows & Events","Marketing & Advertising","Utilities","Internet & Software","Production Labor","Shipping Supplies","Travel","Payroll","Other"];
+var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","Employee Meals","Federal Excise Tax","Fuel Expense","Interest Expense","Legal and Accounting","Office Expense","Other Taxes, Fees & Licenses","Outside Services","Payroll","Penalties","Repairs and Maintenance","Shop Expense","Supplies and Small Tools","Training Expense","Travel Expense","Utilities Expense"];
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function getChannelPrice(prod,channel){
