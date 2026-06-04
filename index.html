@@ -194,7 +194,7 @@ var COLORS=[{n:"Purple Haze",h:"#7c3aed"},{n:"Midnight Blue",h:"#1e3a8a"},{n:"Bl
 function saveCustomColor(n){if(!n||COLORS.find(function(c){return c.n===n;}))return;COLORS.push({n:n,h:"#94a3b8"});var saved=JSON.parse(localStorage.getItem("jcb_custom_colors")||"[]");if(!saved.includes(n)){saved.push(n);localStorage.setItem("jcb_custom_colors",JSON.stringify(saved));}}
 (function(){JSON.parse(localStorage.getItem("jcb_custom_colors")||"[]").forEach(function(n){if(n&&!COLORS.find(function(c){return c.n===n;}))COLORS.push({n:n,h:"#94a3b8"});});})();
 var SERIES=["All","Stick Baits","Nekos","Craws","Baby Hawgs","Finesse Worms","Soft Jerk","Paddle Tail","Swim Bait","Terp Minnow","Glidebait","JC Walker","J-Rat","Bundles","Apparel"];
-var CHANNELS=["DTC","Dealer","Distro","Sponsorship/Promo","Internal"];
+var CHANNELS=["DTC","Dealer","Distro","Pro Staff","Sponsorship/Promo","Internal"];
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 var TODAY=new Date().toISOString().slice(0,10);
 
@@ -211,6 +211,7 @@ function getChannelPrice(prod,channel){
   if(prod&&prod.pack>=8&&prod.price>0&&prod.price<=7.50){
     if(channel==="Dealer")return 3.50;
     if(channel==="Distro")return 2.80;
+    if(channel==="Pro Staff")return 5.00;
   }
   return prod?prod.price:0;
 }
