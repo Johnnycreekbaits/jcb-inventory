@@ -278,7 +278,7 @@ function wire(){
     if(!lines.length){impMsg="Paste data first.";impPrev=null;render();return;}
     var prev=[],bad=[];
     lines.forEach(function(line){
-      var pts=line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(function(s){return s.trim().replace(/^"|"$/g,"");});
+      var pts=line.split(/\s*\|\s*|\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(function(s){return s.trim().replace(/^"|"$/g,"");});
       var cat,desc,amt;
       if(pts.length>=3){cat=pts[0];desc=pts[1];amt=parseFloat(pts[2]);}
       else if(pts.length===2){cat=pts[0];desc=pts[0];amt=parseFloat(pts[1]);}
