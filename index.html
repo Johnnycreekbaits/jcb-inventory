@@ -104,11 +104,24 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4);}
 #scannerVideo{width:100%;border-radius:12px;background:#000;}
 .scan-line{position:absolute;top:50%;left:0;right:0;height:2px;background:#ea580c;opacity:.8;animation:scanMove 2s ease-in-out infinite;}
 @keyframes scanMove{0%,100%{top:30%}50%{top:70%}}
+#printArea{display:none}
+@media print{
+body>*:not(#printArea){display:none!important}
+#printArea{display:block!important}
+@page{size:2.25in 1.25in landscape;margin:0}
+.lbl{font-family:Arial,Helvetica,sans-serif;width:2.25in;height:1.25in;position:relative;display:flex;flex-direction:column;align-items:center;padding:10px 8px 24px;overflow:hidden;page-break-after:always;break-after:page}
+.lbl-qty{position:absolute;top:10px;right:8px;font-size:8pt;font-weight:bold}
+.lbl-bc{flex:1;display:flex;align-items:center;justify-content:center;width:100%}
+.lbl-bc svg{max-width:100%;max-height:.82in}
+.lbl-nm{position:absolute;left:24px;right:8px;bottom:10px;font-size:8pt;font-weight:bold;text-align:center;line-height:1.1}
+}
 </style>
 </head>
 <body>
 <div id="app"><div class="loading"><div class="spin">&#x1F3A3;</div><div style="margin-top:14px;font-weight:700;font-size:16px;color:#475569;">Loading JCB Inventory...</div></div></div>
+<div id="printArea"></div>
 <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
 var SB_URL="https://rgjnasxasmwzvywgkgdu.supabase.co";
 var SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnam5hc3hhc213enZ5d2drZ2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODQ3NjYsImV4cCI6MjA5NDg2MDc2Nn0.kBEkFRW1pe5BAU_P4fhZFcbzBMxfUR2q5-Tvxq16vB8";
@@ -190,6 +203,98 @@ var SEED=[
 {id:1202,name:"Tournament Tee",color:"Limited Edition",series:"Apparel",sku:"JCB-TEE-LE",barcode:"",price:0,pack:1,qty:14,min:5,loc:"Apparel"}
 ];
 
+var LABEL_SEED=[
+{id:10001,product:'4" Baby Hawg',color:"Ringos Gift",barcode:"850070815215",qty:8},
+{id:10002,product:'4" Baby Hawg',color:"Bloodline",barcode:"850070815222",qty:8},
+{id:10003,product:'4" Baby Hawg',color:"Midnight Blue",barcode:"850070815239",qty:8},
+{id:10004,product:'4" Baby Hawg',color:"Green Pumpkin",barcode:"850070815246",qty:8},
+{id:10005,product:'4" Baby Hawg',color:"Purple Haze",barcode:"850070815260",qty:8},
+{id:10006,product:'4" Baby Hawg',color:"Melon Punch",barcode:"850070815277",qty:8},
+{id:10007,product:'4" Baby Hawg',color:"Blackberry",barcode:"850070815598",qty:8},
+{id:10008,product:'4" Baby Hawg',color:"Ringo Red Flake",barcode:"850070815642",qty:8},
+{id:10009,product:'4" Baby Hawg',color:"June Bug",barcode:"850070815734",qty:8},
+{id:10010,product:'4" Baby Hawg',color:"Purple w/ Black Flake",barcode:"850070815789",qty:8},
+{id:10101,product:'4" Craw',color:"Ringos Gift",barcode:"850070815284",qty:8},
+{id:10102,product:'4" Craw',color:"Bloodline",barcode:"850070815291",qty:8},
+{id:10103,product:'4" Craw',color:"Midnight Blue",barcode:"850070815307",qty:8},
+{id:10104,product:'4" Craw',color:"Green Pumpkin",barcode:"850070815314",qty:8},
+{id:10105,product:'4" Craw',color:"Purple Haze",barcode:"850070815338",qty:8},
+{id:10106,product:'4" Craw',color:"Melon Punch",barcode:"850070815345",qty:8},
+{id:10107,product:'4" Craw',color:"Blackberry",barcode:"850070815604",qty:8},
+{id:10108,product:'4" Craw',color:"Ringo Red Flake",barcode:"850070815659",qty:8},
+{id:10109,product:'4" Craw',color:"June Bug",barcode:"850070815741",qty:8},
+{id:10110,product:'4" Craw',color:"Purple w/ Black Flake",barcode:"850070815796",qty:8},
+{id:10201,product:'5" Stick Bait',color:"Ringos Gift",barcode:"850070815079",qty:8},
+{id:10202,product:'5" Stick Bait',color:"Bloodline",barcode:"850070815086",qty:8},
+{id:10203,product:'5" Stick Bait',color:"Midnight Blue",barcode:"850070815093",qty:8},
+{id:10204,product:'5" Stick Bait',color:"Green Pumpkin",barcode:"850070815109",qty:8},
+{id:10205,product:'5" Stick Bait',color:"Baby Bass White & Melon Black Flake",barcode:"850070815116",qty:8},
+{id:10206,product:'5" Stick Bait',color:"Purple Haze",barcode:"850070815123",qty:8},
+{id:10207,product:'5" Stick Bait',color:"Melon Punch",barcode:"850070815130",qty:8},
+{id:10208,product:'5" Stick Bait',color:"Blackberry",barcode:"850070815581",qty:8},
+{id:10209,product:'5" Stick Bait',color:"Ringo Red Flake",barcode:"850070815635",qty:8},
+{id:10210,product:'5" Stick Bait',color:"Purple w/ Black Flake",barcode:"850070815772",qty:8},
+{id:10301,product:'6.5" Finesse Worm',color:"Ringos Gift",barcode:"850070815000",qty:8},
+{id:10302,product:'6.5" Finesse Worm',color:"Bloodline",barcode:"850070815017",qty:8},
+{id:10303,product:'6.5" Finesse Worm',color:"Midnight Blue",barcode:"850070815024",qty:8},
+{id:10304,product:'6.5" Finesse Worm',color:"Green Pumpkin",barcode:"850070815031",qty:8},
+{id:10305,product:'6.5" Finesse Worm',color:"Green Pumpkin Red & Black Flake",barcode:"850070815048",qty:8},
+{id:10306,product:'6.5" Finesse Worm',color:"Purple Haze",barcode:"850070815055",qty:8},
+{id:10307,product:'6.5" Finesse Worm',color:"Melon Punch",barcode:"850070815062",qty:8},
+{id:10308,product:'6.5" Finesse Worm',color:"Blackberry",barcode:"850070815567",qty:8},
+{id:10309,product:'6.5" Finesse Worm',color:"Ringo Red Flake",barcode:"850070815611",qty:8},
+{id:10310,product:'6.5" Finesse Worm',color:"Melon Purple Flake",barcode:"850070815666",qty:8},
+{id:10311,product:'6.5" Finesse Worm',color:"Dirty Dawn",barcode:"850070815710",qty:8},
+{id:10312,product:'6.5" Finesse Worm',color:"Purple w/ Black Flake",barcode:"850070815758",qty:8},
+{id:10313,product:'6.5" Finesse Worm',color:"Morning Dawn",barcode:"850070815802",qty:8},
+{id:10314,product:'6.5" Finesse Worm',color:"Ringo Black Flake",barcode:"850070815826",qty:8},
+{id:10315,product:'6.5" Finesse Worm',color:"Green Pumpkin Purple Flake",barcode:"850070815840",qty:8},
+{id:10316,product:'6.5" Finesse Worm',color:"Green Pumpkin Blue Flake",barcode:"850070815871",qty:8},
+{id:10317,product:'6.5" Finesse Worm',color:"Green Pumpkin Red Flake",barcode:"850070815901",qty:8},
+{id:10318,product:'6.5" Finesse Worm',color:"Ringo Black & Red Flake",barcode:"850070815932",qty:8},
+{id:10319,product:'6.5" Finesse Worm',color:"Melon Black & Red Flake",barcode:"850070815956",qty:8},
+{id:10320,product:'6.5" Finesse Worm',color:"Oxblood",barcode:"850070815697",qty:8},
+{id:10401,product:'5" Neko',color:"Ringos Gift",barcode:"850070815147",qty:8},
+{id:10402,product:'5" Neko',color:"Bloodline",barcode:"850070815154",qty:8},
+{id:10403,product:'5" Neko',color:"Midnight Blue",barcode:"850070815161",qty:8},
+{id:10404,product:'5" Neko',color:"Green Pumpkin",barcode:"850070815178",qty:8},
+{id:10405,product:'5" Neko',color:"Green Pumpkin Red & Black Flake",barcode:"850070815185",qty:8},
+{id:10406,product:'5" Neko',color:"Purple Haze",barcode:"850070815192",qty:8},
+{id:10407,product:'5" Neko',color:"Melon Punch",barcode:"850070815208",qty:8},
+{id:10408,product:'5" Neko',color:"Blackberry",barcode:"850070815574",qty:8},
+{id:10409,product:'5" Neko',color:"Ringo Red Flake",barcode:"850070815628",qty:8},
+{id:10410,product:'5" Neko',color:"Melon Purple Flake",barcode:"850070815673",qty:8},
+{id:10411,product:'5" Neko',color:"Dirty Dawn",barcode:"850070815727",qty:8},
+{id:10412,product:'5" Neko',color:"Purple w/ Black Flake",barcode:"850070815765",qty:8},
+{id:10413,product:'5" Neko',color:"Morning Dawn",barcode:"850070815819",qty:8},
+{id:10414,product:'5" Neko',color:"Ringo Black Flake",barcode:"850070815833",qty:8},
+{id:10415,product:'5" Neko',color:"Green Pumpkin Purple Flake",barcode:"850070815857",qty:8},
+{id:10416,product:'5" Neko',color:"Green Pumpkin Blue Flake",barcode:"850070815888",qty:8},
+{id:10417,product:'5" Neko',color:"Green Pumpkin Red Flake",barcode:"850070815918",qty:8},
+{id:10418,product:'5" Neko',color:"Ringo Black & Red Flake",barcode:"850070815949",qty:8},
+{id:10419,product:'5" Neko',color:"Melon Black & Red Flake",barcode:"850070815963",qty:8},
+{id:10420,product:'5" Neko',color:"Oxblood",barcode:"850070815703",qty:8},
+{id:10501,product:'4" Paddle Tail',color:"Green Ghost",barcode:"850070815376",qty:6},
+{id:10502,product:'4" Paddle Tail',color:"Purple Shimmer",barcode:"850070815475",qty:6},
+{id:10503,product:'4" Paddle Tail',color:"Ringo Rainbow",barcode:"850070815369",qty:6},
+{id:10504,product:'4" Paddle Tail',color:"Midnight Silver",barcode:"850070815680",qty:6},
+{id:10601,product:'5" Soft Jerk',color:"Oreoz",barcode:"850070815352",qty:8},
+{id:10602,product:'5" Soft Jerk',color:"Purple Shimmer",barcode:"850070815321",qty:8},
+{id:10603,product:'5" Soft Jerk',color:"Ringo Rainbow",barcode:"850070815468",qty:8},
+{id:10604,product:'5" Soft Jerk',color:"Midnight Silver",barcode:"850070815253",qty:8},
+{id:10701,product:"Terp Minnow",color:"Ringo Silver & Black Flake",barcode:"850070815970",qty:8},
+{id:10702,product:"Terp Minnow",color:"Midnight Silver",barcode:"850070815994",qty:8},
+{id:10703,product:"Terp Minnow",color:"Blue Shad",barcode:"850070815482",qty:8},
+{id:10704,product:"Terp Minnow",color:"Purple Shimmer",barcode:"850070815987",qty:8},
+{id:10705,product:"Terp Minnow",color:"Ringo Rainbow",barcode:"850070815451",qty:8},
+{id:10801,product:"XG8 Glide",color:"Custom",barcode:"850070815505",qty:1},
+{id:10802,product:"XG8 Glide",color:"Motherlode Purple",barcode:"850070815512",qty:1},
+{id:10803,product:"XG8 Glide",color:"Bluegill Dream",barcode:"850070815529",qty:1},
+{id:10804,product:"XG8 Glide",color:"Kokanee Kush",barcode:"850070815536",qty:1},
+{id:10805,product:"XG8 Glide",color:"Rainbow OG",barcode:"850070815543",qty:1},
+{id:10806,product:"XG8 Glide",color:"White Ghost",barcode:"850070815550",qty:1}
+];
+
 var COLORS=[{n:"Purple Haze",h:"#7c3aed"},{n:"Midnight Blue",h:"#1e3a8a"},{n:"Bloodline",h:"#991b1b"},{n:"Green Pumpkin",h:"#365314"},{n:"Melon Punch",h:"#ea580c"},{n:"Ringos Gift",h:"#be185d"},{n:"Oreoz",h:"#44403c"},{n:"Ringo/Oreoz",h:"#78716c"},{n:"Blackberry",h:"#4a1d96"},{n:"Ringo Red Flake",h:"#9f1239"},{n:"Melon Purple Flake",h:"#c2410c"},{n:"Dirty Dawn",h:"#b45309"},{n:"June Bug",h:"#1e1b4b"},{n:"Purple w/ Black Flake",h:"#4c1d95"},{n:"Morning Dawn",h:"#a21caf"},{n:"Ringo Black Flake",h:"#881337"},{n:"Oxblood",h:"#7f1d1d"},{n:"Baby Bass White and Melon",h:"#0369a1"},{n:"Big Red / White",h:"#dc2626"},{n:"Chartreuse/Blue",h:"#65a30d"},{n:"Purple/Black",h:"#581c87"},{n:"Black/White",h:"#171717"},{n:"Blue/Orange",h:"#1d4ed8"},{n:"Bone White",h:"#a8a29e"},{n:"Chartreuse/White",h:"#84cc16"},{n:"Blue and Orange",h:"#0369a1"},{n:"Brown",h:"#78350f"},{n:"Grey",h:"#4b5563"},{n:"Purple",h:"#6d28d9"},{n:"Custom",h:"#334155"},{n:"White Ghost",h:"#94a3b8"},{n:"Rainbow OG",h:"#db2777"},{n:"Kokanee Kush",h:"#7e22ce"},{n:"BlueGill Dream",h:"#0284c7"},{n:"Motherlode Purple",h:"#6d28d9"},{n:"Ringo Silver/BF",h:"#94a3b8"},{n:"White Silver/PF",h:"#a78bfa"},{n:"Silver Minnow/BF",h:"#64748b"},{n:"Blueish Shad",h:"#3b82f6"},{n:"Green Ghost",h:"#16a34a"},{n:"Limited Edition",h:"#f97316"},{n:"Ringo Rainbow",h:"#ec4899"}];
 function saveCustomColor(n){if(!n||COLORS.find(function(c){return c.n===n;}))return;COLORS.push({n:n,h:"#94a3b8"});var saved=JSON.parse(localStorage.getItem("jcb_custom_colors")||"[]");if(!saved.includes(n)){saved.push(n);localStorage.setItem("jcb_custom_colors",JSON.stringify(saved));}}
 (function(){JSON.parse(localStorage.getItem("jcb_custom_colors")||"[]").forEach(function(n){if(n&&!COLORS.find(function(c){return c.n===n;}))COLORS.push({n:n,h:"#94a3b8"});});})();
@@ -198,8 +303,8 @@ var CHANNELS=["DTC","Dealer","Distro","Pro Staff","Sponsorship/Promo","Internal"
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 var TODAY=new Date().toISOString().slice(0,10);
 
-var products=[],logs=[],auditLog=[];
-var activeTab="inv",search="",activeSeries="All",logFilter="All",histFilter="All";
+var products=[],logs=[],auditLog=[],labelDefs=[];
+var activeTab="inv",search="",activeSeries="All",logFilter="All",histFilter="All",activeLabelProduct=null;
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
 var lastSync=null,cart=[],currentUser=localStorage.getItem("jcb_user")||"",currentChannel="DTC";
 var currentOrderPerson=localStorage.getItem("jcb_lastPerson")||"",currentOrderProject="",currentOrderDate="",currentOrderState="";
@@ -237,6 +342,14 @@ function boot(){
     return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());
   }).then(function(h){
     auditLog=h;
+    return dbGet("labels","?order=product,color").catch(function(){return [];});
+  }).then(function(lb){
+    if(lb.length===0){
+      return dbPost("labels",LABEL_SEED).then(function(){return dbGet("labels","?order=product,color");}).catch(function(){return [];});
+    }
+    return lb;
+  }).then(function(lb){
+    labelDefs=lb;
     lastSync=Date.now();
     if(!currentUser){showUserPicker();}else{render();}
   }).catch(function(e){
@@ -245,7 +358,7 @@ function boot(){
 }
 
 function doRefresh(){
-  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;lastSync=Date.now();render();}).catch(function(){});
+  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();render();}).catch(function(){});
 }
 setInterval(doRefresh,10000);
 
@@ -310,6 +423,7 @@ function render(){
   var html="";
   if(activeTab==="inv")html=invHTML();
   else if(activeTab==="co")html=coHTML();
+  else if(activeTab==="lbl")html=lblHTML();
   else if(activeTab==="rep")html=repHTML();
   else if(activeTab==="hist")html=histHTML();
   else if(activeTab==="imp")html=impHTML();
@@ -325,7 +439,7 @@ function hdrHTML(){
 }
 
 function tabsHTML(){
-  var tabs=[{id:"inv",i:"&#x1F4E6;",l:"Stock"},{id:"co",i:"&#x1F3A3;",l:"Checkout"},{id:"rep",i:"&#x1F4CA;",l:"Reports"},{id:"hist",i:"&#x1F4CB;",l:"History"},{id:"imp",i:"&#x2601;&#xFE0F;",l:"Import"},{id:"exp",i:"&#x1F4E4;",l:"Export"}];
+  var tabs=[{id:"inv",i:"&#x1F4E6;",l:"Stock"},{id:"co",i:"&#x1F3A3;",l:"Checkout"},{id:"lbl",i:"&#x1F3F7;&#xFE0F;",l:"Labels"},{id:"rep",i:"&#x1F4CA;",l:"Reports"},{id:"hist",i:"&#x1F4CB;",l:"History"},{id:"imp",i:"&#x2601;&#xFE0F;",l:"Import"},{id:"exp",i:"&#x1F4E4;",l:"Export"}];
   return'<div class="tabs"><div class="tabs-inner">'+tabs.map(function(t){return'<button class="tab'+(activeTab===t.id?" active":"")+'" data-tab="'+t.id+'">'+t.i+" "+t.l+"</button>";}).join("")+"</div></div>";
 }
 
@@ -550,6 +664,55 @@ function editOrderModal(id){
   };
 }
 
+function lblHTML(){
+  var prods=[...new Set(labelDefs.map(function(l){return l.product;}))].sort();
+  if(!activeLabelProduct||prods.indexOf(activeLabelProduct)<0)activeLabelProduct=prods[0]||null;
+  var prodChips=prods.map(function(p){return'<button class="series-btn'+(activeLabelProduct===p?" active":"")+'" data-lblprod="'+p+'">'+p+"</button>";}).join("");
+  var colors=labelDefs.filter(function(l){return l.product===activeLabelProduct;});
+  var rows=colors.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;">No colors yet for this bait.</div>':colors.map(function(l){return'<div class="product-card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><div style="min-width:0;flex:1;"><div style="font-weight:700;font-size:14px;">'+l.color+'</div><div class="product-meta"><span class="barcode-tag">&#x258C; '+l.barcode+'</span><span>Qty '+l.qty+'</span></div></div><button class="btn-primary" data-lblprint="'+l.id+'" style="flex-shrink:0;">&#x1F5A8;&#xFE0F; Print</button></div>';}).join("");
+  return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><div><div class="section-title">LABELS</div><div class="section-sub">Print bag labels by bait &amp; color</div></div><button class="btn-primary" id="btnAddLabel">+ Add</button></div>'+(prods.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;">No labels yet. Tap + Add to create the first one.</div>':'<div class="series-bar">'+prodChips+"</div>"+rows);
+}
+
+function printLabelModal(id){
+  var l=labelDefs.find(function(x){return x.id===id;});if(!l)return;
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay" id="mPrintLbl"><div class="modal"><div class="modal-header"><div class="modal-title">PRINT LABEL</div><button class="close-btn" id="mPLClose">&times;</button></div><div style="font-weight:700;font-size:14px;margin-bottom:4px;">'+l.product+" &mdash; "+l.color+'</div><div style="font-size:11px;color:#94a3b8;margin-bottom:16px;">'+l.barcode+'</div><label class="field-label">Copies to print</label><div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;"><button class="qty-btn" id="plMinus">&minus;</button><input class="field-input" id="plCopies" type="number" value="'+(l.qty||1)+'" min="1" style="width:70px;text-align:center;"/><button class="qty-btn" id="plPlus">+</button></div><button class="btn-primary" id="plPrintBtn" style="width:100%;padding:13px;">&#x1F5A8;&#xFE0F; Print Labels</button></div></div>');
+  document.getElementById("mPLClose").onclick=function(){document.getElementById("mPrintLbl").remove();};
+  document.getElementById("mPrintLbl").onclick=function(e){if(e.target===this)this.remove();};
+  document.getElementById("plMinus").onclick=function(){var i=document.getElementById("plCopies");i.value=Math.max(1,(parseInt(i.value)||1)-1);};
+  document.getElementById("plPlus").onclick=function(){var i=document.getElementById("plCopies");i.value=Math.max(1,(parseInt(i.value)||1)+1);};
+  document.getElementById("plPrintBtn").onclick=function(){
+    var copies=Math.max(1,parseInt(document.getElementById("plCopies").value)||1);
+    var area=document.getElementById("printArea");area.innerHTML="";
+    for(var i=0;i<copies;i++){
+      var lbl=document.createElement("div");lbl.className="lbl";
+      var q=document.createElement("span");q.className="lbl-qty";q.textContent="Qty. "+l.qty;
+      var bw=document.createElement("div");bw.className="lbl-bc";
+      var svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.id="lblsvg"+i;bw.appendChild(svg);
+      var nm=document.createElement("div");nm.className="lbl-nm";nm.textContent=l.product+" "+l.color;
+      lbl.appendChild(q);lbl.appendChild(bw);lbl.appendChild(nm);area.appendChild(lbl);
+      JsBarcode("#lblsvg"+i,l.barcode,{format:"UPC",width:1.5,height:46,displayValue:true,fontSize:9,margin:0,textMargin:1});
+    }
+    window.print();
+    setTimeout(function(){area.innerHTML="";},500);
+    document.getElementById("mPrintLbl").remove();
+  };
+}
+
+function addLabelModal(){
+  var prods=[...new Set(labelDefs.map(function(l){return l.product;}))].sort();
+  var dl=prods.map(function(p){return'<option value="'+p+'">';}).join("");
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mAddLbl"><div class="modal sheet"><div class="modal-header"><div class="modal-title">NEW LABEL</div><button class="close-btn" id="mALClose">&times;</button></div><div class="field-wrap"><label class="field-label">Bait *</label><input class="field-input" id="al_product" list="lblProdList" placeholder="e.g. 4 in Baby Hawg"/><datalist id="lblProdList">'+dl+'</datalist></div><div class="field-wrap"><label class="field-label">Color *</label><input class="field-input" id="al_color" placeholder="e.g. Bloodline"/></div><div class="field-wrap"><label class="field-label">Barcode *</label><input class="field-input" id="al_barcode" placeholder="850070815xxx"/></div><div class="field-wrap"><label class="field-label">Print Qty *</label><input class="field-input" id="al_qty" type="number" value="8"/></div><button class="btn-primary" id="mALSave" style="width:100%;padding:13px;">Add Label</button></div></div>');
+  document.getElementById("mALClose").onclick=function(){document.getElementById("mAddLbl").remove();};
+  document.getElementById("mALSave").onclick=function(){
+    var product=document.getElementById("al_product").value.trim();
+    var color=document.getElementById("al_color").value.trim();
+    var barcode=document.getElementById("al_barcode").value.trim();
+    var qty=parseInt(document.getElementById("al_qty").value);
+    if(!product||!color||!barcode||isNaN(qty)){showToast("All fields required","err");return;}
+    dbPost("labels",{id:Date.now(),product:product,color:color,barcode:barcode,qty:qty}).then(function(){activeLabelProduct=product;showToast("Label added!");document.getElementById("mAddLbl").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");});
+  };
+}
+
 function wire(){
   document.querySelectorAll(".tab").forEach(function(b){b.onclick=function(){activeTab=b.dataset.tab;render();};});
   var btnAdd=document.getElementById("btnAdd");if(btnAdd)btnAdd.onclick=function(){addModal();};
@@ -654,6 +817,9 @@ function wire(){
   var bEI=document.getElementById("btnExpInv");if(bEI)bEI.onclick=function(){exportCSV(products,"jcb-inventory.csv",["name","color","series","sku","barcode","price","pack","qty","min","loc"]);};
   var bEL=document.getElementById("btnExpLogs");if(bEL)bEL.onclick=function(){exportCSV(logs,"jcb-checkout-log.csv",["name","color","qty","price","ch","person","project","date","ret","st"]);};
   var bEH=document.getElementById("btnExpHist")||document.getElementById("btnExportHist");if(bEH)bEH.onclick=function(){exportCSV(auditLog,"jcb-history.csv",["product_name","color","change_type","qty_before","qty_after","changed_by","note","changed_at"]);};
+  document.querySelectorAll("[data-lblprod]").forEach(function(b){b.onclick=function(){activeLabelProduct=b.dataset.lblprod;render();};});
+  document.querySelectorAll("[data-lblprint]").forEach(function(b){b.onclick=function(){printLabelModal(parseInt(b.dataset.lblprint));};});
+  var btnAddLabel=document.getElementById("btnAddLabel");if(btnAddLabel)btnAddLabel.onclick=function(){addLabelModal();};
 }
 
 boot();
