@@ -320,6 +320,7 @@ function getChannelPrice(prod,channel){
   }
   return prod?prod.price:0;
 }
+function escAttr(s){return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;");}
 function colorHex(n){var c=COLORS.find(function(c){return c.n===n;});return c?c.h:"#94a3b8";}
 function dotHtml(n,s){s=s||10;if(!n)return"";var h=colorHex(n);var border=(h==="#a8a29e"||h==="#94a3b8")?"1px solid #cbd5e1":"none";return'<span class="color-dot" style="width:'+s+'px;height:'+s+'px;background:'+h+';border:'+border+'"></span>';}
 function showToast(msg,type){var t=document.createElement("div");t.className="toast";t.style.background=type==="err"?"#dc2626":type==="info"?"#2563eb":"#16a34a";t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.remove();},3000);}
@@ -667,7 +668,7 @@ function editOrderModal(id){
 function lblHTML(){
   var prods=[...new Set(labelDefs.map(function(l){return l.product;}))].sort();
   if(!activeLabelProduct||prods.indexOf(activeLabelProduct)<0)activeLabelProduct=prods[0]||null;
-  var prodChips=prods.map(function(p){return'<button class="series-btn'+(activeLabelProduct===p?" active":"")+'" data-lblprod="'+p+'">'+p+"</button>";}).join("");
+  var prodChips=prods.map(function(p){return'<button class="series-btn'+(activeLabelProduct===p?" active":"")+'" data-lblprod="'+escAttr(p)+'">'+p+"</button>";}).join("");
   var colors=labelDefs.filter(function(l){return l.product===activeLabelProduct;});
   var rows=colors.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;">No colors yet for this bait.</div>':colors.map(function(l){return'<div class="product-card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><div style="min-width:0;flex:1;"><div style="font-weight:700;font-size:14px;">'+l.color+'</div><div class="product-meta"><span class="barcode-tag">&#x258C; '+l.barcode+'</span><span>Qty '+l.qty+'</span></div></div><button class="btn-primary" data-lblprint="'+l.id+'" style="flex-shrink:0;">&#x1F5A8;&#xFE0F; Print</button></div>';}).join("");
   return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><div><div class="section-title">LABELS</div><div class="section-sub">Print bag labels by bait &amp; color</div></div><button class="btn-primary" id="btnAddLabel">+ Add</button></div>'+(prods.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;">No labels yet. Tap + Add to create the first one.</div>':'<div class="series-bar">'+prodChips+"</div>"+rows);
@@ -700,7 +701,7 @@ function printLabelModal(id){
 
 function addLabelModal(){
   var prods=[...new Set(labelDefs.map(function(l){return l.product;}))].sort();
-  var dl=prods.map(function(p){return'<option value="'+p+'">';}).join("");
+  var dl=prods.map(function(p){return'<option value="'+escAttr(p)+'">';}).join("");
   document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mAddLbl"><div class="modal sheet"><div class="modal-header"><div class="modal-title">NEW LABEL</div><button class="close-btn" id="mALClose">&times;</button></div><div class="field-wrap"><label class="field-label">Bait *</label><input class="field-input" id="al_product" list="lblProdList" placeholder="e.g. 4 in Baby Hawg"/><datalist id="lblProdList">'+dl+'</datalist></div><div class="field-wrap"><label class="field-label">Color *</label><input class="field-input" id="al_color" placeholder="e.g. Bloodline"/></div><div class="field-wrap"><label class="field-label">Barcode *</label><input class="field-input" id="al_barcode" placeholder="850070815xxx"/></div><div class="field-wrap"><label class="field-label">Print Qty *</label><input class="field-input" id="al_qty" type="number" value="8"/></div><button class="btn-primary" id="mALSave" style="width:100%;padding:13px;">Add Label</button></div></div>');
   document.getElementById("mALClose").onclick=function(){document.getElementById("mAddLbl").remove();};
   document.getElementById("mALSave").onclick=function(){
