@@ -307,13 +307,16 @@ var TODAY=new Date().toISOString().slice(0,10);
 var products=[],logs=[],auditLog=[],labelDefs=[];
 var activeTab="inv",search="",activeSeries="All",logFilter="All",histFilter="All",activeLabelProduct=null;
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
-var lastSync=null,cart=[],currentUser=localStorage.getItem("jcb_user")||"",currentChannel="DTC";
+var lastSync=null,cart=JSON.parse(localStorage.getItem("jcb_cart")||"[]"),currentUser=localStorage.getItem("jcb_user")||"",currentChannel="DTC";
 var currentOrderPerson=localStorage.getItem("jcb_lastPerson")||"",currentOrderProject="",currentOrderDate="",currentOrderState="";
 
 function getStatus(qty,min){if(qty===0)return"Out";if(qty<=min)return"Low";return"OK";}
 var STATUS={OK:{bg:"#dcfce7",tc:"#166534",dot:"#16a34a",label:"In Stock"},Low:{bg:"#fff7ed",tc:"#9a3412",dot:"#ea580c",label:"Low Stock"},Out:{bg:"#fef2f2",tc:"#991b1b",dot:"#dc2626",label:"Out of Stock"}};
 function getChannelPrice(prod,channel){
   if(channel==="Sponsorship/Promo"||channel==="Internal")return 0;
+  if(prod&&prod.series==="JC Walker"){
+    if(channel==="Dealer"||channel==="Distro")return 10.99;
+  }
   if(prod&&prod.pack>=8&&prod.price>0&&prod.price<=7.50){
     if(channel==="Dealer")return 3.50;
     if(channel==="Distro")return 2.80;
@@ -370,10 +373,12 @@ function showUserPicker(){
 
 function setUser(name){if(!name||!name.trim())return;currentUser=name.trim();localStorage.setItem("jcb_user",currentUser);render();}
 
+function saveCart(){localStorage.setItem("jcb_cart",JSON.stringify(cart));}
 function addToCart(prod){
   var ex=cart.find(function(i){return i.pid===prod.id;});
   if(ex){ex.qty++;showToast(prod.name+" qty updated");}
   else{cart.push({pid:prod.id,name:prod.name,color:prod.color||"",price:prod.price||0,qty:1});}
+  saveCart();
 }
 
 function confirmOrder(){
@@ -415,7 +420,7 @@ function confirmOrder(){
     });
     return chain;
   }).then(function(){
-    cart=[];
+    cart=[];saveCart();
     showToast("Order confirmed! "+totalQty+" bags out");
     return doRefresh();
   }).catch(function(e){showToast("Order failed: "+e.message,"err");});
@@ -758,7 +763,7 @@ function wire(){
   };});
   document.querySelectorAll("[data-cartrem]").forEach(function(b){b.onclick=function(){cart.splice(parseInt(b.dataset.cartrem),1);render();};});
   var btnConfirm=document.getElementById("btnConfirmOrder");if(btnConfirm)btnConfirm.onclick=function(){confirmOrder();};
-  var btnClear=document.getElementById("btnClearCart");if(btnClear)btnClear.onclick=function(){cart=[];render();};
+  var btnClear=document.getElementById("btnClearCart");if(btnClear)btnClear.onclick=function(){cart=[];saveCart();render();};
   document.querySelectorAll("[data-edit]").forEach(function(b){b.onclick=function(){addModal(parseInt(b.dataset.edit));};});
   document.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){delModal(parseInt(b.dataset.del));};});
   document.querySelectorAll("[data-logf]").forEach(function(b){b.onclick=function(){logFilter=b.dataset.logf;render();};});
