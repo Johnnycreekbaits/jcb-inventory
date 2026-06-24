@@ -305,7 +305,7 @@ var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","D
 var TODAY=new Date().toISOString().slice(0,10);
 
 var products=[],logs=[],auditLog=[],labelDefs=[];
-var activeTab="inv",search="",activeSeries="All",logFilter="All",histFilter="All",activeLabelProduct=null;
+var activeTab="inv",search="",activeSeries="All",activeStockFilter=null,logFilter="All",histFilter="All",activeLabelProduct=null;
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
 var lastSync=null,cart=JSON.parse(localStorage.getItem("jcb_cart")||"[]"),currentUser=localStorage.getItem("jcb_user")||"",currentChannel="DTC";
 var currentOrderPerson=localStorage.getItem("jcb_lastPerson")||"",currentOrderProject="",currentOrderDate="",currentOrderState="";
@@ -451,7 +451,7 @@ function tabsHTML(){
 }
 
 function invHTML(){
-  var f=products.filter(function(p){return activeSeries==="All"||p.series===activeSeries;}).filter(function(p){return [p.name,p.color||"",p.sku||"",p.barcode||"",p.loc||""].join(" ").toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){var n=a.name.localeCompare(b.name);return n!==0?n:(a.color||"").localeCompare(b.color||"");});
+  var f=products.filter(function(p){return activeSeries==="All"||p.series===activeSeries;}).filter(function(p){return !activeStockFilter||getStatus(p.qty,p.min)===activeStockFilter;}).filter(function(p){return [p.name,p.color||"",p.sku||"",p.barcode||"",p.loc||""].join(" ").toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){var n=a.name.localeCompare(b.name);return n!==0?n:(a.color||"").localeCompare(b.color||"");});
   var low=products.filter(function(p){return getStatus(p.qty,p.min)==="Low";}).length;
   var out=products.filter(function(p){return getStatus(p.qty,p.min)==="Out";}).length;
   var bc=products.filter(function(p){return p.barcode;}).length;
@@ -462,7 +462,7 @@ function invHTML(){
   // Build unique color list from products
   var allColors=[...new Set(products.map(function(p){return p.color;}).filter(Boolean))].sort();
   var colorTabs=allColors.map(function(c){return'<button class="series-btn'+(search===c?" active":"")+'" data-colorsearch="'+c+'" style="display:flex;align-items:center;gap:4px;">'+dotHtml(c,8)+c+'</button>';}).join("");
-  return'<div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><div class="kpi" style="background:#fffbeb;border:1px solid #fde68a;"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></div><div class="kpi" style="background:#fef2f2;border:1px solid #fecaca;"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></div><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+search+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div style="margin-bottom:8px;"><div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:6px;">SEARCH BY COLOR</div><div class="series-bar">'+colorTabs+'</div></div><div class="count-label">'+f.length+" VARIANTS</div>"+cards;
+  return'<div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><button data-stockfilter="Low" class="kpi" style="background:#fffbeb;border:2px solid '+(activeStockFilter==="Low"?"#d97706":"#fde68a")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Low"?"0 0 0 2px #fde68a":"none")+';"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></button><button data-stockfilter="Out" class="kpi" style="background:#fef2f2;border:2px solid '+(activeStockFilter==="Out"?"#dc2626":"#fecaca")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Out"?"0 0 0 2px #fecaca":"none")+';"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></button><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+search+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div style="margin-bottom:8px;"><div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:6px;">SEARCH BY COLOR</div><div class="series-bar">'+colorTabs+'</div></div><div class="count-label">'+f.length+" VARIANTS</div>"+cards;
 }
 
 function coHTML(){
@@ -729,6 +729,7 @@ function wire(){
   var btnR=document.getElementById("btnRefresh");if(btnR)btnR.onclick=function(){btnR.textContent="...";doRefresh().then(function(){btnR.textContent="&#x1F504;";});};
   var si=document.getElementById("searchInput");if(si)si.oninput=function(e){var pos=e.target.selectionStart;search=e.target.value;render();var ns=document.getElementById("searchInput");if(ns){ns.focus();ns.setSelectionRange(pos,pos);}};
   document.querySelectorAll(".series-btn").forEach(function(b){b.onclick=function(){activeSeries=b.dataset.series;render();};});
+  document.querySelectorAll("[data-stockfilter]").forEach(function(b){b.onclick=function(){activeStockFilter=activeStockFilter===b.dataset.stockfilter?null:b.dataset.stockfilter;render();};});
   // Color search tabs
   document.querySelectorAll("[data-colorsearch]").forEach(function(b){b.onclick=function(){
     if(search===b.dataset.colorsearch){search="";}else{search=b.dataset.colorsearch;}
