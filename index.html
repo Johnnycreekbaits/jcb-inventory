@@ -317,6 +317,11 @@ function getChannelPrice(prod,channel){
   if(prod&&prod.series==="JC Walker"){
     if(channel==="Dealer"||channel==="Distro")return 10.99;
   }
+  if(prod&&prod.series==="Paddle Tail"){
+    if(channel==="Dealer")return 3.50;
+    if(channel==="Distro")return 2.80;
+    if(channel==="Pro Staff")return 5.00;
+  }
   if(prod&&prod.pack>=8&&prod.price>0&&prod.price<=7.50){
     if(channel==="Dealer")return 3.50;
     if(channel==="Distro")return 2.80;
