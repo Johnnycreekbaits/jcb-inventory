@@ -96,13 +96,12 @@ var DEFAULT_COSTS=[
   {id:"jc-walker",name:"JC Walker",series:"JC Walker",unit:"bait",cogs:6.31},
   {id:"xg8-glide",name:"XG8 Glide",series:"Glidebait",unit:"bait",cogs:44.25}
 ];
-function loadCosts(){
-  var s=localStorage.getItem("jcb_costs");
-  var saved=null;
+var COGS_CORRECTIONS={"variety-pack":7.28};
+function loadCostsLocal(){
+  var s=localStorage.getItem("jcb_costs");var saved=null;
   if(s){try{saved=JSON.parse(s);}catch(e){}}
   if(!saved)return DEFAULT_COSTS.map(function(c){return Object.assign({},c);});
   var result=saved.slice();
-  var COGS_CORRECTIONS={"variety-pack":7.28};
   DEFAULT_COSTS.forEach(function(def){
     var existing=result.find(function(r){return r.id===def.id;});
     if(!existing){result.push(Object.assign({},def));}
@@ -113,8 +112,19 @@ function loadCosts(){
   });
   return result;
 }
-var costProfiles=loadCosts();
-function saveCosts(){localStorage.setItem("jcb_costs",JSON.stringify(costProfiles));}
+var costProfiles=loadCostsLocal();
+function mergeMissingDefaults(profiles){
+  var toAdd=[];
+  DEFAULT_COSTS.forEach(function(def){
+    if(!profiles.find(function(c){return c.id===def.id;})){profiles.push(Object.assign({},def));toAdd.push(Object.assign({},def));}
+  });
+  if(toAdd.length>0)dbPost("cost_profiles",toAdd).catch(function(){});
+}
+function saveCosts(){
+  localStorage.setItem("jcb_costs",JSON.stringify(costProfiles));
+  dbPost("cost_profiles",costProfiles).catch(function(e){console.warn("Cost profile sync:",e);});
+}
+function deleteCostFromDB(id){dbDelete("cost_profiles","id=eq."+id).catch(function(){});}
 var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","Employee Meals","Federal Excise Tax","Fuel Expense","Interest Expense","Legal and Accounting","Office Expense","Other Taxes, Fees & Licenses","Outside Services","Payroll","Penalties","Repairs and Maintenance","Shop Expense","Supplies and Small Tools","Training Expense","Travel Expense","Utilities Expense"];
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -217,9 +227,24 @@ function boot(){
   Promise.all([
     dbGet("products","?order=name,color"),
     dbGet("logs","?order=date.desc"),
-    dbGet("expenses","?order=month.desc,created_at.desc").catch(function(){expReady=false;return[];})
+    dbGet("expenses","?order=month.desc,created_at.desc").catch(function(){expReady=false;return[];}),
+    dbGet("cost_profiles","?order=name").catch(function(){return null;})
   ]).then(function(res){
-    products=res[0];logs=res[1];expenses=res[2];render();
+    products=res[0];logs=res[1];expenses=res[2];
+    var dbCosts=res[3];
+    if(dbCosts===null){
+      // Table not set up yet — keep localStorage values
+    }else if(dbCosts.length===0){
+      // Table exists but empty — seed it from defaults
+      costProfiles=DEFAULT_COSTS.map(function(c){return Object.assign({},c);});
+      dbPost("cost_profiles",costProfiles).catch(function(){});
+    }else{
+      // Use Supabase data as authoritative source
+      costProfiles=dbCosts;
+      mergeMissingDefaults(costProfiles);
+    }
+    localStorage.setItem("jcb_costs",JSON.stringify(costProfiles));
+    render();
   }).catch(function(e){
     document.getElementById("app").innerHTML='<div class="loading"><div style="font-size:36px;">&#x26A0;&#xFE0F;</div><div style="margin-top:12px;font-weight:700;color:#dc2626;">Connection error</div><div style="font-size:12px;color:#64748b;margin-top:6px;">'+e.message+'</div><button onclick="boot()" style="margin-top:20px;background:#ea580c;color:#fff;border:none;border-radius:10px;padding:11px 24px;font-weight:700;font-size:13px;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Try Again</button></div>';
   });
@@ -426,7 +451,10 @@ function wire(){
     b.onclick=function(){
       var idx=parseInt(b.dataset.delcp);
       if(!confirm("Remove "+costProfiles[idx].name+" from cost profiles?"))return;
-      costProfiles.splice(idx,1);saveCosts();render();
+      var cpId=costProfiles[idx].id;
+      costProfiles.splice(idx,1);
+      deleteCostFromDB(cpId);
+      saveCosts();render();
     };
   });
   var btnAddCp=document.getElementById("btnAddCp");
