@@ -111,7 +111,7 @@ var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","E
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function getChannelPrice(prod,channel){
-  if(channel==="Sample/Promo"||channel==="Internal"||channel==="Sponsorship")return 0;
+  if(channel==="Sample/Promo"||channel==="Internal"||channel==="Sponsorship"||channel==="Sponsorship/Promo")return 0;
   if(prod&&prod.pack>=8&&prod.price>0&&prod.price<=7.50){
     if(channel==="Wholesale"||channel==="Tournament")return 3.50;
     if(channel==="Distribution")return 2.80;
@@ -131,8 +131,9 @@ function matchCostProfile(prod){
   return match||null;
 }
 function getItemCOGS(qty,prod){var cp=matchCostProfile(prod);return cp?cp.cogs*qty:0;}
+function parseItems(raw){try{if(!raw)return[];var p=JSON.parse(raw);return Array.isArray(p)?p:(p.items&&Array.isArray(p.items)?p.items:[]);}catch(e){return[];}}
 function calcOrder(log,prods){
-  var items=[];try{if(log.items)items=JSON.parse(log.items);}catch(e){}
+  var items=parseItems(log.items);
   var rev=0,cogs=0;
   if(items.length>0){
     items.forEach(function(item){
@@ -260,7 +261,7 @@ function prodHTML(){
   var fl=getPeriodLogs();
   var byType={};
   fl.forEach(function(l){
-    var items=[];try{if(l.items)items=JSON.parse(l.items);}catch(e){}
+    var items=parseItems(l.items);
     var ch=l.ch||"Other";
     if(items.length>0){
       items.forEach(function(item){
