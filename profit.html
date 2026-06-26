@@ -381,27 +381,154 @@ function costsHTML(){
   return'<div class="section-title">COST PROFILES</div><div class="section-sub">Cost to produce per unit &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
 }
 
+function getYTDLogs(){
+  var now=new Date(),jan1=now.getFullYear()+"-01-01",today=localDateStr(now);
+  return logs.filter(function(l){return l.date>=jan1&&l.date<=today&&l.st!=="Returned";});
+}
+function getYTDExpenses(){
+  if(!expReady)return[];
+  var y=String(new Date().getFullYear());
+  return expenses.filter(function(e){return e.month&&e.month.startsWith(y);});
+}
+
 function reportHTML(){
   var fl=getPeriodLogs(),fe=getPeriodExpenses(),s=calcSummary(fl,fe);
-  var byChannel={},byCategory={};
+
+  // YTD comparison (skip when period is already full year)
+  var showYTD=(period!=="year");
+  var ytdLogs=showYTD?getYTDLogs():[],ytdFe=showYTD?getYTDExpenses():[];
+  var ytd=showYTD?calcSummary(ytdLogs,ytdFe):null;
+
+  // Revenue by channel
+  var byChannel={};
   fl.forEach(function(l){var ch=l.ch||"Other";if(!byChannel[ch])byChannel[ch]=0;byChannel[ch]+=calcOrder(l,products).rev;});
+
+  // Expenses by category
+  var byCategory={};
   fe.forEach(function(e){if(!byCategory[e.category])byCategory[e.category]=0;byCategory[e.category]+=Number(e.amount);});
-  var revRows=Object.entries(byChannel).sort(function(a,b){return b[1]-a[1];}).map(function(e){return'<div class="pl-row"><span style="color:#475569;">'+e[0]+'</span><span style="font-weight:600;">'+fmt$(e[1])+'</span></div>';}).join("");
-  var expRows=Object.entries(byCategory).sort(function(a,b){return b[1]-a[1];}).map(function(e){return'<div class="pl-row"><span style="color:#475569;">'+e[0]+'</span><span style="font-weight:600;">-'+fmt$(e[1])+'</span></div>';}).join("");
-  var netColor=s.net>=0?"#2563eb":"#dc2626";
-  var netBg=s.net>=0?"#eff6ff":"#fef2f2";
-  var netBorder=s.net>=0?"#bfdbfe":"#fecaca";
+
+  // Units by product (aggregate across items + legacy single-product logs)
+  var byProduct={};
+  fl.forEach(function(l){
+    var items=parseItems(l.items);
+    var isSponsor=(l.ch==="Sponsorship/Promo");
+    if(items.length>0){
+      items.forEach(function(item){
+        var p=products.find(function(x){return x.id===item.pid;});
+        var key=(p&&p.name)||item.name||"Unknown";
+        if(!byProduct[key])byProduct[key]={units:0,sponsorUnits:0,rev:0,cogs:0};
+        byProduct[key].units+=item.qty;
+        if(isSponsor)byProduct[key].sponsorUnits+=item.qty;
+        byProduct[key].rev+=item.qty*(item.price||0);
+        byProduct[key].cogs+=getItemCOGS(item.qty,p);
+      });
+    }else{
+      var p=products.find(function(x){return x.id===l.pid;});
+      var key=(p&&p.name)||l.pid||"Unknown";
+      if(!byProduct[key])byProduct[key]={units:0,sponsorUnits:0,rev:0,cogs:0};
+      byProduct[key].units+=l.qty;
+      if(isSponsor)byProduct[key].sponsorUnits+=l.qty;
+      byProduct[key].rev+=l.qty*(l.price||0);
+      byProduct[key].cogs+=getItemCOGS(l.qty,p);
+    }
+  });
+
+  // Sponsorship totals
   var rSponsorCogs=0,rSponsorUnits=0;
   fl.forEach(function(l){
     if(l.ch==="Sponsorship/Promo"){
       rSponsorCogs+=calcOrder(l,products).cogs;
-      rSponsorUnits+=parseItems(l.items).reduce(function(s,i){return s+i.qty;},0)||l.qty;
+      rSponsorUnits+=parseItems(l.items).reduce(function(acc,i){return acc+i.qty;},0)||l.qty;
     }
   });
   var rPaidCogs=s.cogs-rSponsorCogs;
-  var rCogsRows=(rPaidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;">-'+fmt$(rPaidCogs)+'</span></div>':'')+(rSponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship / Promo Cost</span><span style="font-weight:600;">-'+fmt$(rSponsorCogs)+'</span></div>':'');
+
+  var netColor=s.net>=0?"#2563eb":"#dc2626";
+  var netBg=s.net>=0?"#eff6ff":"#fef2f2";
+  var netBorder=s.net>=0?"#bfdbfe":"#fecaca";
+
+  // --- HTML sections ---
+  var revRows=Object.entries(byChannel).sort(function(a,b){return b[1]-a[1];}).map(function(e){
+    return'<div class="pl-row"><span style="color:#475569;">'+e[0]+'</span><span style="font-weight:600;">'+fmt$(e[1])+'</span></div>';
+  }).join("");
+
+  var expRows=Object.entries(byCategory).sort(function(a,b){return b[1]-a[1];}).map(function(e){
+    return'<div class="pl-row"><span style="color:#475569;">'+e[0]+'</span><span style="font-weight:600;">-'+fmt$(e[1])+'</span></div>';
+  }).join("");
+
+  var rCogsRows=(rPaidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;">-'+fmt$(rPaidCogs)+'</span></div>':'')
+    +(rSponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship / Promo Cost</span><span style="font-weight:600;">-'+fmt$(rSponsorCogs)+'</span></div>':'');
+
   var rSponsorNote=rSponsorUnits>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Units given away (Sponsorship/Promo)</span><span style="color:#94a3b8;font-weight:600;">'+rSponsorUnits+' units &middot; '+fmt$(rSponsorCogs)+' cost</span></div>':'';
-  return periodBarHTML()+'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;" class="no-print"><div><div class="section-title">SHAREHOLDER REPORT</div><div class="section-sub">Johnny Creek Baits &middot; '+periodLabel()+'</div></div><button class="btn-outline" id="btnPrint">&#x1F5A8;&#xFE0F; Print / Save PDF</button></div><div class="card"><div style="font-family:\'Bebas Neue\',cursive;font-size:20px;color:#ea580c;letter-spacing:2px;margin-bottom:4px;">JOHNNY CREEK BAITS</div><div style="font-size:12px;color:#94a3b8;margin-bottom:16px;">Financial Report &middot; '+periodLabel()+'</div><div class="pl-section-hd">Revenue by Channel</div>'+(revRows||'<div style="font-size:12px;color:#94a3b8;padding:6px 0;">No orders in this period</div>')+'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div><div class="pl-section-hd">Cost of Goods Sold</div>'+rCogsRows+'<div class="pl-total-row"><span style="color:#16a34a;">Gross Profit</span><span style="color:#16a34a;font-weight:700;">'+fmt$(s.gross)+' ('+fmtPct(s.grossPct)+')</span></div><div class="pl-section-hd">Operating Expenses</div>'+(expRows||'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">Not entered for this period</div>')+(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span>-'+fmt$(s.expenses)+'</span></div>':"")+rSponsorNote+'<div style="background:'+netBg+';border:1px solid '+netBorder+';border-radius:12px;padding:16px;margin-top:12px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:32px;color:'+netColor+';">'+fmt$(s.net)+'</span></div><div style="font-size:11px;color:'+netColor+';margin-top:4px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div></div><div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">BALANCE SHEET NOTE</div><div class="pl-row"><span style="color:#475569;">Inventory Value (at cost &middot; on hand)</span><span style="font-weight:700;color:#7c3aed;">'+fmt$(calcInventoryValue())+'</span></div></div></div>';
+
+  var ytdPanel='';
+  if(showYTD&&ytd&&ytd.orders>0){
+    var ytdNetColor=ytd.net>=0?"#2563eb":"#dc2626";
+    ytdPanel='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">'
+      +'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;">'
+        +'<div style="font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:1px;margin-bottom:6px;">'+periodLabel().toUpperCase()+'</div>'
+        +'<div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;">'+fmt$(s.rev)+'</div>'
+        +'<div style="font-size:10px;color:#64748b;margin-bottom:8px;">Revenue &middot; '+s.orders+' orders</div>'
+        +'<div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:'+netColor+';">'+fmt$(s.net)+'</div>'
+        +'<div style="font-size:10px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+' &middot; '+fmtPct(s.netPct)+'</div>'
+      +'</div>'
+      +'<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px;">'
+        +'<div style="font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:1px;margin-bottom:6px;">YTD '+new Date().getFullYear()+'</div>'
+        +'<div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;">'+fmt$(ytd.rev)+'</div>'
+        +'<div style="font-size:10px;color:#64748b;margin-bottom:8px;">Revenue &middot; '+ytd.orders+' orders</div>'
+        +'<div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:'+ytdNetColor+';">'+fmt$(ytd.net)+'</div>'
+        +'<div style="font-size:10px;color:'+ytdNetColor+';">Net '+(ytd.net>=0?"Profit":"Loss")+' &middot; '+fmtPct(ytd.netPct)+'</div>'
+      +'</div>'
+    +'</div>';
+  }
+
+  var productRows=Object.entries(byProduct).sort(function(a,b){return b[1].units-a[1].units;}).map(function(e){
+    var nm=e[0],d=e[1];
+    var gross=d.rev-d.cogs,margin=d.rev>0?(gross/d.rev)*100:0;
+    var sponsorNote=d.sponsorUnits>0?' ('+d.sponsorUnits+' promo)':"";
+    return'<div class="pl-row" style="align-items:flex-start;">'
+      +'<div><div style="font-weight:600;font-size:13px;">'+nm+'</div>'
+      +'<div style="font-size:10px;color:#94a3b8;">'+d.units+' units'+sponsorNote+(d.rev>0?' &middot; '+fmtPct(margin)+' margin':'')+'</div></div>'
+      +'<div style="text-align:right;"><div style="font-weight:600;">'+fmt$(d.rev)+'</div>'
+      +'<div style="font-size:10px;color:#94a3b8;">-'+fmt$(d.cogs)+' COGS</div></div>'
+    +'</div>';
+  }).join("");
+
+  return periodBarHTML()
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;" class="no-print">'
+      +'<div><div class="section-title">SHAREHOLDER REPORT</div><div class="section-sub">Johnny Creek Baits &middot; '+periodLabel()+'</div></div>'
+      +'<button class="btn-outline" id="btnPrint">&#x1F5A8;&#xFE0F; Print / Save PDF</button>'
+    +'</div>'
+    +'<div class="card">'
+      +'<div style="font-family:\'Bebas Neue\',cursive;font-size:20px;color:#ea580c;letter-spacing:2px;margin-bottom:4px;">JOHNNY CREEK BAITS</div>'
+      +'<div style="font-size:12px;color:#94a3b8;margin-bottom:16px;">Financial Report &middot; '+periodLabel()+'</div>'
+      +ytdPanel
+      +'<div class="pl-section-hd">Revenue by Channel</div>'
+      +(revRows||'<div style="font-size:12px;color:#94a3b8;padding:6px 0;">No orders in this period</div>')
+      +'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div>'
+      +'<div class="pl-section-hd">Cost of Goods Sold</div>'
+      +rCogsRows
+      +'<div class="pl-total-row"><span style="color:#16a34a;">Gross Profit</span><span style="color:#16a34a;font-weight:700;">'+fmt$(s.gross)+' ('+fmtPct(s.grossPct)+')</span></div>'
+      +'<div class="pl-section-hd">Operating Expenses</div>'
+      +(expRows||'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">Not entered for this period</div>')
+      +(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span>-'+fmt$(s.expenses)+'</span></div>':"")
+      +rSponsorNote
+      +'<div style="background:'+netBg+';border:1px solid '+netBorder+';border-radius:12px;padding:16px;margin-top:12px;">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;">'
+          +'<span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span>'
+          +'<span style="font-family:\'Bebas Neue\',cursive;font-size:32px;color:'+netColor+';">'+fmt$(s.net)+'</span>'
+        +'</div>'
+        +'<div style="font-size:11px;color:'+netColor+';margin-top:4px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div>'
+      +'</div>'
+      +'<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">'
+        +'<div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">UNITS SOLD BY PRODUCT</div>'
+        +(productRows||'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">No units in this period</div>')
+      +'</div>'
+      +'<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0;">'
+        +'<div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">BALANCE SHEET NOTE</div>'
+        +'<div class="pl-row"><span style="color:#475569;">Inventory Value (at cost &middot; on hand)</span><span style="font-weight:700;color:#7c3aed;">'+fmt$(calcInventoryValue())+'</span></div>'
+      +'</div>'
+    +'</div>';
 }
 
 function wire(){
