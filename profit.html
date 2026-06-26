@@ -193,7 +193,9 @@ function getPeriodRange(){
   if(period==="quarter"){var q=Math.floor(m/3);return{start:new Date(y,q*3,1),end:new Date(y,q*3+3,0)};}
   if(period==="lastquarter"){var q=Math.floor(m/3)-1,qy=y;if(q<0){q=3;qy--;}return{start:new Date(qy,q*3,1),end:new Date(qy,q*3+3,0)};}
   if(period==="year")return{start:new Date(y,0,1),end:new Date(y,11,31)};
-  if(period==="lastyear")return{start:new Date(y-1,0,1),end:new Date(y-1,11,31)};}
+  if(period==="lastyear")return{start:new Date(y-1,0,1),end:new Date(y-1,11,31)};
+  if(period==="alltime"){var earliest=logs.length>0?logs[logs.length-1].date:"2026-01-01";var ep=earliest.split("-");return{start:new Date(parseInt(ep[0]),parseInt(ep[1])-1,parseInt(ep[2])),end:new Date();};}
+}
 
 function getPeriodMonths(){
   var r=getPeriodRange(),months=[],d=new Date(r.start.getFullYear(),r.start.getMonth(),1);
@@ -220,11 +222,12 @@ function periodLabel(){
   if(period==="lastquarter"){var q=Math.floor(m/3)-1,qy=y;if(q<0){q=3;qy--;}return"Q"+(q+1)+" "+qy;}
   if(period==="year")return"Full Year "+y;
   if(period==="lastyear")return"Full Year "+(y-1);
+  if(period==="alltime")return"All Time";
   return"";
 }
 
 function boot(){
-  if(!sessionStorage.getItem("jcb_finance_auth")){showLogin();return;}
+  if(!localStorage.getItem("jcb_finance_auth")){showLogin();return;}
   Promise.all([
     dbGet("products","?order=name,color"),
     dbGet("logs","?order=date.desc"),
@@ -254,7 +257,7 @@ function boot(){
 function showLogin(){
   document.getElementById("app").innerHTML='<div class="login-wrap"><div class="login-card"><div style="text-align:center;margin-bottom:24px;"><div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#ea580c,#f97316);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px;">&#x1F4B0;</div><div style="font-family:\'Bebas Neue\',cursive;font-size:28px;color:#ea580c;letter-spacing:2px;">JCB FINANCE</div><div style="font-size:12px;color:#94a3b8;margin-top:4px;">Owner &amp; Investor Portal</div></div><div class="field-wrap"><label class="field-label">Password</label><input class="field-input" type="password" id="pwInput" placeholder="Enter password" style="font-size:16px;" autocomplete="current-password"/></div><div id="loginErr" style="color:#dc2626;font-size:12px;margin-bottom:10px;display:none;">Incorrect password. Try again.</div><button class="btn-primary" id="btnLogin" style="width:100%;padding:13px;font-size:14px;">Sign In</button></div></div>';
   var inp=document.getElementById("pwInput");
-  document.getElementById("btnLogin").onclick=function(){hashPw(inp.value).then(function(h){if(h===PW_HASH){sessionStorage.setItem("jcb_finance_auth","1");boot();}else{document.getElementById("loginErr").style.display="block";inp.value="";inp.focus();}});};
+  document.getElementById("btnLogin").onclick=function(){hashPw(inp.value).then(function(h){if(h===PW_HASH){localStorage.setItem("jcb_finance_auth","1");boot();}else{document.getElementById("loginErr").style.display="block";inp.value="";inp.focus();}});};
   inp.onkeydown=function(e){if(e.key==="Enter")document.getElementById("btnLogin").click();};
   inp.focus();
 }
@@ -279,7 +282,7 @@ function tabsHTML(){
   return'<div class="tabs no-print"><div class="tabs-inner">'+tabs.map(function(t){return'<button class="tab'+(activeTab===t.id?" active":"")+'" data-tab="'+t.id+'">'+t.i+" "+t.l+"</button>";}).join("")+"</div></div>";
 }
 function periodBarHTML(){
-  var opts=[{id:"month",l:"This Month"},{id:"lastmonth",l:"Last Month"},{id:"quarter",l:"This Quarter"},{id:"lastquarter",l:"Last Quarter"},{id:"year",l:"This Year"},{id:"lastyear",l:"Last Year"}];
+  var opts=[{id:"month",l:"This Month"},{id:"lastmonth",l:"Last Month"},{id:"quarter",l:"This Quarter"},{id:"lastquarter",l:"Last Quarter"},{id:"year",l:"This Year"},{id:"lastyear",l:"Last Year"},{id:"alltime",l:"All Time"}];
   return'<div class="period-bar no-print">'+opts.map(function(o){return'<button class="period-btn'+(period===o.id?" active":"")+'" data-period="'+o.id+'">'+o.l+"</button>";}).join("")+"</div>";
 }
 
@@ -337,7 +340,7 @@ function prodHTML(){
     var margin=t.rev>0?(gross/t.rev*100):0;
     return'<div class="card" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-weight:700;font-size:14px;">'+t.name+'</div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;">'+t.qty+' '+t.unit+'s</div></div><div style="margin-bottom:10px;">'+chTags+'</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"><div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">COGS</div><div style="font-weight:700;color:#dc2626;font-size:13px;">'+fmt$(t.cogs)+'</div></div><div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Revenue</div><div style="font-weight:700;color:#16a34a;font-size:13px;">'+fmt$(t.rev)+'</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Margin</div><div style="font-weight:700;font-size:13px;">'+fmtPct(margin)+'</div></div></div></div>';
   }).join("");
-  return periodBarHTML()+'<div class="section-title">PRODUCTION</div><div class="section-sub">'+periodLabel()+' &middot; '+totalQty+' total units made</div>'+rowsHTML+'<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;"><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total COGS</span><span style="color:#dc2626;">'+fmt$(totalCogs)+'</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total Revenue</span><span style="color:#16a34a;">'+fmt$(totalRev)+'</span></div><div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:4px;"><span style="font-weight:700;">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#2563eb;">'+fmt$(totalRev-totalCogs)+'</span></div></div>';
+  return periodBarHTML()+'<div class="section-title">PRODUCTION</div><div class="section-sub">'+periodLabel()+' &middot; '+totalQty+' units sold &amp; distributed</div>'+rowsHTML+'<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;"><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total COGS</span><span style="color:#dc2626;">'+fmt$(totalCogs)+'</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total Revenue</span><span style="color:#16a34a;">'+fmt$(totalRev)+'</span></div><div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:4px;"><span style="font-weight:700;">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#2563eb;">'+fmt$(totalRev-totalCogs)+'</span></div></div>';
 }
 
 function plHTML(){
@@ -395,7 +398,7 @@ function reportHTML(){
   var fl=getPeriodLogs(),fe=getPeriodExpenses(),s=calcSummary(fl,fe);
 
   // YTD comparison (skip when period is already full year)
-  var showYTD=(period!=="year");
+  var showYTD=(period!=="year"&&period!=="alltime");
   var ytdLogs=showYTD?getYTDLogs():[],ytdFe=showYTD?getYTDExpenses():[];
   var ytd=showYTD?calcSummary(ytdLogs,ytdFe):null;
 
@@ -534,7 +537,7 @@ function reportHTML(){
 function wire(){
   document.querySelectorAll(".tab").forEach(function(b){b.onclick=function(){activeTab=b.dataset.tab;render();};});
   document.querySelectorAll("[data-period]").forEach(function(b){b.onclick=function(){period=b.dataset.period;render();};});
-  var lo=document.getElementById("btnLogout");if(lo)lo.onclick=function(){sessionStorage.removeItem("jcb_finance_auth");showLogin();};
+  var lo=document.getElementById("btnLogout");if(lo)lo.onclick=function(){localStorage.removeItem("jcb_finance_auth");showLogin();};
   var pr=document.getElementById("btnPrint");if(pr)pr.onclick=function(){window.print();};
   var ems=document.getElementById("expMonthSel");if(ems)ems.onchange=function(e){expMonth=e.target.value;impPrev=null;impMsg="";impText="";render();};
   var ta=document.getElementById("expTA");if(ta)ta.oninput=function(e){impText=e.target.value;};
