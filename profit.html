@@ -89,6 +89,10 @@ var DEFAULT_COSTS=[
   {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.04},
   {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:1.04},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.04},
+  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:58.24},
+  {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
+  {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
+  {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
   {id:"jc-walker",name:"JC Walker",series:"JC Walker",unit:"bait",cogs:6.31},
   {id:"xg8-glide",name:"XG8 Glide",series:"Glidebait",unit:"bait",cogs:44.25}
 ];
@@ -181,7 +185,8 @@ function getPeriodMonths(){
   while(d<=r.end){months.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
   return months;
 }
-function getPeriodLogs(){var r=getPeriodRange();return logs.filter(function(l){var d=new Date(l.date);return d>=r.start&&d<=r.end&&l.st!=="Returned";});}
+function localDateStr(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function getPeriodLogs(){var r=getPeriodRange();var s=localDateStr(r.start),e=localDateStr(r.end);return logs.filter(function(l){return l.date>=s&&l.date<=e&&l.st!=="Returned";});}
 function getPeriodExpenses(){if(!expReady)return[];var ms=getPeriodMonths();return expenses.filter(function(e){return ms.indexOf(e.month)>=0;});}
 
 function calcSummary(fl,fe){
@@ -356,10 +361,17 @@ function reportHTML(){
   var netColor=s.net>=0?"#2563eb":"#dc2626";
   var netBg=s.net>=0?"#eff6ff":"#fef2f2";
   var netBorder=s.net>=0?"#bfdbfe":"#fecaca";
-  var rSponsorCogs=0;fl.forEach(function(l){if(l.ch==="Sponsorship/Promo")rSponsorCogs+=calcOrder(l,products).cogs;});
+  var rSponsorCogs=0,rSponsorUnits=0;
+  fl.forEach(function(l){
+    if(l.ch==="Sponsorship/Promo"){
+      rSponsorCogs+=calcOrder(l,products).cogs;
+      rSponsorUnits+=parseItems(l.items).reduce(function(s,i){return s+i.qty;},0)||l.qty;
+    }
+  });
   var rPaidCogs=s.cogs-rSponsorCogs;
-  var rCogsRows=(rPaidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;">-'+fmt$(rPaidCogs)+'</span></div>':'')+(rSponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship Cost</span><span style="font-weight:600;">-'+fmt$(rSponsorCogs)+'</span></div>':'');
-  return periodBarHTML()+'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;" class="no-print"><div><div class="section-title">SHAREHOLDER REPORT</div><div class="section-sub">Johnny Creek Baits &middot; '+periodLabel()+'</div></div><button class="btn-outline" id="btnPrint">&#x1F5A8;&#xFE0F; Print / Save PDF</button></div><div class="card"><div style="font-family:\'Bebas Neue\',cursive;font-size:20px;color:#ea580c;letter-spacing:2px;margin-bottom:4px;">JOHNNY CREEK BAITS</div><div style="font-size:12px;color:#94a3b8;margin-bottom:16px;">Financial Report &middot; '+periodLabel()+'</div><div class="pl-section-hd">Revenue by Channel</div>'+(revRows||'<div style="font-size:12px;color:#94a3b8;padding:6px 0;">No orders in this period</div>')+'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div><div class="pl-section-hd">Cost of Goods Sold</div>'+rCogsRows+'<div class="pl-total-row"><span style="color:#16a34a;">Gross Profit</span><span style="color:#16a34a;font-weight:700;">'+fmt$(s.gross)+' ('+fmtPct(s.grossPct)+')</span></div><div class="pl-section-hd">Operating Expenses</div>'+(expRows||'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">Not entered for this period</div>')+(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span>-'+fmt$(s.expenses)+'</span></div>':"")+'<div style="background:'+netBg+';border:1px solid '+netBorder+';border-radius:12px;padding:16px;margin-top:12px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:32px;color:'+netColor+';">'+fmt$(s.net)+'</span></div><div style="font-size:11px;color:'+netColor+';margin-top:4px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div></div></div>';
+  var rCogsRows=(rPaidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;">-'+fmt$(rPaidCogs)+'</span></div>':'')+(rSponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship / Promo Cost</span><span style="font-weight:600;">-'+fmt$(rSponsorCogs)+'</span></div>':'');
+  var rSponsorNote=rSponsorUnits>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Units given away (Sponsorship/Promo)</span><span style="color:#94a3b8;font-weight:600;">'+rSponsorUnits+' units &middot; '+fmt$(rSponsorCogs)+' cost</span></div>':'';
+  return periodBarHTML()+'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;" class="no-print"><div><div class="section-title">SHAREHOLDER REPORT</div><div class="section-sub">Johnny Creek Baits &middot; '+periodLabel()+'</div></div><button class="btn-outline" id="btnPrint">&#x1F5A8;&#xFE0F; Print / Save PDF</button></div><div class="card"><div style="font-family:\'Bebas Neue\',cursive;font-size:20px;color:#ea580c;letter-spacing:2px;margin-bottom:4px;">JOHNNY CREEK BAITS</div><div style="font-size:12px;color:#94a3b8;margin-bottom:16px;">Financial Report &middot; '+periodLabel()+'</div><div class="pl-section-hd">Revenue by Channel</div>'+(revRows||'<div style="font-size:12px;color:#94a3b8;padding:6px 0;">No orders in this period</div>')+'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div><div class="pl-section-hd">Cost of Goods Sold</div>'+rCogsRows+'<div class="pl-total-row"><span style="color:#16a34a;">Gross Profit</span><span style="color:#16a34a;font-weight:700;">'+fmt$(s.gross)+' ('+fmtPct(s.grossPct)+')</span></div><div class="pl-section-hd">Operating Expenses</div>'+(expRows||'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">Not entered for this period</div>')+(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span>-'+fmt$(s.expenses)+'</span></div>':"")+rSponsorNote+'<div style="background:'+netBg+';border:1px solid '+netBorder+';border-radius:12px;padding:16px;margin-top:12px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:32px;color:'+netColor+';">'+fmt$(s.net)+'</span></div><div style="font-size:11px;color:'+netColor+';margin-top:4px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div></div></div>';
 }
 
 function wire(){

@@ -404,8 +404,9 @@ function confirmOrder(){
   var totalQty=cartCopy.reduce(function(s,i){return s+i.qty;},0);
   var totalVal=cartCopy.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
   var first=cartCopy[0];
-  dbGet("logs","?select=name&order=id.desc&limit=1").then(function(allLogs){
-    var last=allLogs&&allLogs.length>0&&allLogs[0].name?parseInt(allLogs[0].name.replace("ORD-",""),10)||0:0;
+  dbGet("logs","?select=name&order=name.desc&limit=50").then(function(allLogs){
+    var last=0;
+    if(allLogs&&allLogs.length>0){for(var i=0;i<allLogs.length;i++){var m=allLogs[i].name&&allLogs[i].name.match(/^ORD-(\d+)$/);if(m){last=parseInt(m[1],10)||0;break;}}};
     var orderNum=String(last+1).padStart(4,"0");
     var orderLabel="ORD-"+orderNum;
     return dbPost("logs",{id:Date.now(),name:orderLabel,color:"",pid:first.pid,qty:totalQty,price:totalQty>0?totalVal/totalQty:0,ch:channel,person:person,project:project,date:date,items:JSON.stringify({state:orderState,items:cartCopy}),ret:null,st:"Out"});
@@ -655,7 +656,7 @@ function editOrderModal(id){
     if(newProject!==(log.project||""))changes.push("project: "+(log.project||"—")+" → "+(newProject||"—"));
     if(newDate!==log.date)changes.push("date: "+log.date+" → "+newDate);
     if(newState!==ordState)changes.push("state: "+(ordState||"—")+" → "+(newState||"—"));
-    var updatedItems=editItems.map(function(item){var p=products.find(function(x){return x.name===item.name&&(x.color||"")===(item.color||"");});return Object.assign({},item,{price:getChannelPrice(p||{price:item.price,pack:8},newChannel)});});
+    var updatedItems=editItems.map(function(item){var p=products.find(function(x){return x.id===item.pid;});return Object.assign({},item,{price:getChannelPrice(p||{price:item.price,pack:8},newChannel)});});
     var newTotalQty=updatedItems.reduce(function(s,i){return s+i.qty;},0);
     var newTotalVal=updatedItems.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
     var chain=Promise.resolve();
@@ -663,7 +664,7 @@ function editOrderModal(id){
       var updated=editItems[idx];if(!updated)return;
       var qtyDiff=updated.qty-orig.qty;if(qtyDiff===0)return;
       chain=chain.then(function(){
-        var p=products.find(function(x){return x.name===orig.name&&(x.color||"")===(orig.color||"");});if(!p)return;
+        var p=products.find(function(x){return x.id===orig.pid;});if(!p)return;
         var oldInv=p.qty;var newInv=Math.max(0,oldInv-qtyDiff);
         products=products.map(function(x){return x.id===p.id?Object.assign({},x,{qty:newInv}):x;});
         changes.push(orig.name+(orig.color?" - "+orig.color:"")+" qty: "+orig.qty+" → "+updated.qty);
