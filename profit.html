@@ -112,9 +112,13 @@ var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","D
 
 function getChannelPrice(prod,channel){
   if(channel==="Sample/Promo"||channel==="Internal"||channel==="Sponsorship"||channel==="Sponsorship/Promo")return 0;
+  if(prod&&prod.series==="JC Walker"){
+    if(channel==="Dealer"||channel==="Distro")return 10.99;
+  }
   if(prod&&prod.pack>=8&&prod.price>0&&prod.price<=7.50){
-    if(channel==="Wholesale"||channel==="Tournament")return 3.50;
-    if(channel==="Distribution")return 2.80;
+    if(channel==="Dealer")return 3.50;
+    if(channel==="Distro")return 2.80;
+    if(channel==="Pro Staff")return 5.00;
   }
   return prod?prod.price:0;
 }
@@ -138,7 +142,7 @@ function calcOrder(log,prods){
   if(items.length>0){
     items.forEach(function(item){
       var p=prods.find(function(x){return x.id===item.pid;});
-      rev+=item.qty*getChannelPrice(p||{price:item.price||0,pack:8},log.ch||"Retail");
+      rev+=item.qty*(item.price||0);
       cogs+=getItemCOGS(item.qty,p);
     });
   }else{
@@ -271,7 +275,7 @@ function prodHTML(){
         if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:"Unknown"),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
         byType[key].qty+=item.qty;
         byType[key].cogs+=getItemCOGS(item.qty,p||null);
-        byType[key].rev+=item.qty*getChannelPrice(p||{price:item.price||0,pack:8},ch);
+        byType[key].rev+=item.qty*(item.price||0);
         if(!byType[key].channels[ch])byType[key].channels[ch]=0;
         byType[key].channels[ch]+=item.qty;
       });
@@ -282,7 +286,7 @@ function prodHTML(){
       if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:"Unknown"),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
       byType[key].qty+=l.qty;
       byType[key].cogs+=getItemCOGS(l.qty,p||null);
-      byType[key].rev+=l.qty*getChannelPrice(p||{price:l.price||0,pack:8},ch);
+      byType[key].rev+=l.qty*getChannelPrice(p||{price:l.price||0,pack:8},ch); // legacy no-items orders
       if(!byType[key].channels[ch])byType[key].channels[ch]=0;
       byType[key].channels[ch]+=l.qty;
     }
