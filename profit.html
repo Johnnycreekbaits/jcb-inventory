@@ -95,7 +95,7 @@ var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","E
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function getChannelPrice(prod,channel){
-  if(channel==="Sample/Promo"||channel==="Internal")return 0;
+  if(channel==="Sample/Promo"||channel==="Internal"||channel==="Sponsorship")return 0;
   if(prod&&prod.pack>=8&&prod.price>0&&prod.price<=7.50){
     if(channel==="Wholesale"||channel==="Tournament")return 3.50;
     if(channel==="Distribution")return 2.80;
