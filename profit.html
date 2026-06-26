@@ -89,7 +89,7 @@ var DEFAULT_COSTS=[
   {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.04},
   {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:1.04},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.04},
-  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:58.24},
+  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:7.28},
   {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
   {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
   {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
@@ -102,10 +102,14 @@ function loadCosts(){
   if(s){try{saved=JSON.parse(s);}catch(e){}}
   if(!saved)return DEFAULT_COSTS.map(function(c){return Object.assign({},c);});
   var result=saved.slice();
+  var COGS_CORRECTIONS={"variety-pack":7.28};
   DEFAULT_COSTS.forEach(function(def){
     var existing=result.find(function(r){return r.id===def.id;});
     if(!existing){result.push(Object.assign({},def));}
-    else if(!existing.series){existing.series=def.series;}
+    else{
+      if(!existing.series)existing.series=def.series;
+      if(COGS_CORRECTIONS[def.id]!==undefined&&existing.cogs!==COGS_CORRECTIONS[def.id])existing.cogs=COGS_CORRECTIONS[def.id];
+    }
   });
   return result;
 }
