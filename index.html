@@ -789,8 +789,22 @@ function wire(){
   document.querySelectorAll("[data-ret]").forEach(function(b){b.onclick=function(e){e.stopPropagation();
     var id=parseInt(b.dataset.ret);var log=logs.find(function(l){return l.id===id;});if(!log)return;
     dbPatch("logs","id=eq."+id,{ret:TODAY,st:"Returned"}).then(function(){
-      var p=products.find(function(x){return x.id===log.pid;});
-      if(p){var nq=p.qty+log.qty;return dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){return logHistory(p,p.qty,nq,"return",currentUser,"Return from "+(log.person||"customer"));});}
+      var parsed=parseOrderItems(log.items);var items=parsed.items;
+      if(items.length>0){
+        var chain=Promise.resolve();
+        items.forEach(function(item){
+          chain=chain.then(function(){
+            var p=products.find(function(x){return x.id===item.pid;});
+            if(!p)return;
+            var before=p.qty;var nq=before+item.qty;p.qty=nq;
+            return dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){return logHistory(p,before,nq,"return",currentUser,"Return: "+(log.name||"order")+" — "+(item.name||"item")+(item.color?" "+item.color:""));});
+          });
+        });
+        return chain;
+      }else{
+        var p=products.find(function(x){return x.id===log.pid;});
+        if(p){var before=p.qty;var nq=before+log.qty;p.qty=nq;return dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){return logHistory(p,before,nq,"return",currentUser,"Return from "+(log.person||"customer"));});}
+      }
     }).then(function(){showToast("Returned!");return doRefresh();}).catch(function(){showToast("Error","err");});
   };});
   var oc=document.getElementById("orderChannel");
