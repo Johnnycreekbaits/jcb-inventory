@@ -80,15 +80,31 @@ function dbPost(t,b){return fetch(SB_URL+"/rest/v1/"+t,{method:"POST",headers:Ob
 function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
 
 var DEFAULT_COSTS=[
-  {id:"baby-hawg",name:"Baby Hawg",unit:"bag",cogs:1.04},
-  {id:"craw",name:"Craw",unit:"bag",cogs:1.04},
-  {id:"finesse-worm",name:'6" Finesse Worm',unit:"bag",cogs:1.04},
-  {id:"neko",name:"Neko",unit:"bag",cogs:1.04},
-  {id:"stickbait",name:"Stickbait",unit:"bag",cogs:1.04},
-  {id:"jc-walker",name:"JC Walker",unit:"bait",cogs:6.31},
-  {id:"xg8-glide",name:"XG8 Glide",unit:"bait",cogs:44.25}
+  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:1.04},
+  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:1.04},
+  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:1.04},
+  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:1.04},
+  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:1.04},
+  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:1.04},
+  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.04},
+  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:1.04},
+  {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.04},
+  {id:"jc-walker",name:"JC Walker",series:"JC Walker",unit:"bait",cogs:6.31},
+  {id:"xg8-glide",name:"XG8 Glide",series:"Glidebait",unit:"bait",cogs:44.25}
 ];
-function loadCosts(){var s=localStorage.getItem("jcb_costs");if(s){try{return JSON.parse(s);}catch(e){}}return DEFAULT_COSTS.map(function(c){return Object.assign({},c);});}
+function loadCosts(){
+  var s=localStorage.getItem("jcb_costs");
+  var saved=null;
+  if(s){try{saved=JSON.parse(s);}catch(e){}}
+  if(!saved)return DEFAULT_COSTS.map(function(c){return Object.assign({},c);});
+  var result=saved.slice();
+  DEFAULT_COSTS.forEach(function(def){
+    var existing=result.find(function(r){return r.id===def.id;});
+    if(!existing){result.push(Object.assign({},def));}
+    else if(!existing.series){existing.series=def.series;}
+  });
+  return result;
+}
 var costProfiles=loadCosts();
 function saveCosts(){localStorage.setItem("jcb_costs",JSON.stringify(costProfiles));}
 var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","Employee Meals","Federal Excise Tax","Fuel Expense","Interest Expense","Legal and Accounting","Office Expense","Other Taxes, Fees & Licenses","Outside Services","Payroll","Penalties","Repairs and Maintenance","Shop Expense","Supplies and Small Tools","Training Expense","Travel Expense","Utilities Expense"];
@@ -104,16 +120,15 @@ function getChannelPrice(prod,channel){
 }
 function matchCostProfile(prod){
   if(!prod)return null;
-  if(prod.series==="Glidebait")return costProfiles.find(function(c){return c.id==="xg8-glide";})||null;
-  if(prod.series==="JC Walker")return costProfiles.find(function(c){return c.id==="jc-walker";})||null;
+  var s=(prod.series||"").toLowerCase();
   var n=(prod.name||"").toLowerCase();
-  var match=costProfiles.find(function(c){
+  var match=costProfiles.find(function(c){return c.series&&c.series.toLowerCase()===s;});
+  if(match)return match;
+  match=costProfiles.find(function(c){
     var cn=c.name.toLowerCase();
     return n.indexOf(cn)>=0||cn.split(" ").some(function(w){return w.length>=5&&n.indexOf(w)>=0;});
   });
-  if(match)return match;
-  if(prod.pack>=8&&prod.price>0&&prod.price<=7.50){var fb=costProfiles.find(function(c){return c.unit==="bag";});return fb||{cogs:1.04,unit:"bag",name:"Soft Plastic"};}
-  return null;
+  return match||null;
 }
 function getItemCOGS(qty,prod){var cp=matchCostProfile(prod);return cp?cp.cogs*qty:0;}
 function calcOrder(log,prods){
