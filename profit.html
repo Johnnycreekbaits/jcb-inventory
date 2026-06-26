@@ -181,7 +181,7 @@ function getPeriodMonths(){
   while(d<=r.end){months.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
   return months;
 }
-function getPeriodLogs(){var r=getPeriodRange();return logs.filter(function(l){var d=new Date(l.date);return d>=r.start&&d<=r.end;});}
+function getPeriodLogs(){var r=getPeriodRange();return logs.filter(function(l){var d=new Date(l.date);return d>=r.start&&d<=r.end&&l.st!=="Returned";});}
 function getPeriodExpenses(){if(!expReady)return[];var ms=getPeriodMonths();return expenses.filter(function(e){return ms.indexOf(e.month)>=0;});}
 
 function calcSummary(fl,fe){
