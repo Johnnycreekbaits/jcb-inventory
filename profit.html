@@ -79,7 +79,18 @@ function dbGet(t,q){return fetch(SB_URL+"/rest/v1/"+t+(q||""),{headers:HDR}).the
 function dbPost(t,b){return fetch(SB_URL+"/rest/v1/"+t,{method:"POST",headers:Object.assign({},HDR,{"Prefer":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify(b)}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
 function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
 
-var BOM={softPlastic:1.04,glide:44.25,walker:6.31};
+var DEFAULT_COSTS=[
+  {id:"baby-hawg",name:"Baby Hawg",unit:"bag",cogs:1.04},
+  {id:"craw",name:"Craw",unit:"bag",cogs:1.04},
+  {id:"finesse-worm",name:'6" Finesse Worm',unit:"bag",cogs:1.04},
+  {id:"neko",name:"Neko",unit:"bag",cogs:1.04},
+  {id:"stickbait",name:"Stickbait",unit:"bag",cogs:1.04},
+  {id:"jc-walker",name:"JC Walker",unit:"bait",cogs:6.31},
+  {id:"xg8-glide",name:"XG8 Glide",unit:"bait",cogs:44.25}
+];
+function loadCosts(){var s=localStorage.getItem("jcb_costs");if(s){try{return JSON.parse(s);}catch(e){}}return DEFAULT_COSTS.map(function(c){return Object.assign({},c);});}
+var costProfiles=loadCosts();
+function saveCosts(){localStorage.setItem("jcb_costs",JSON.stringify(costProfiles));}
 var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","Employee Meals","Federal Excise Tax","Fuel Expense","Interest Expense","Legal and Accounting","Office Expense","Other Taxes, Fees & Licenses","Outside Services","Payroll","Penalties","Repairs and Maintenance","Shop Expense","Supplies and Small Tools","Training Expense","Travel Expense","Utilities Expense"];
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -91,13 +102,20 @@ function getChannelPrice(prod,channel){
   }
   return prod?prod.price:0;
 }
-function getItemCOGS(qty,prod){
-  if(!prod)return 0;
-  if(prod.series==="Glidebait")return BOM.glide*qty;
-  if(prod.series==="JC Walker")return BOM.walker*qty;
-  if(prod.pack>=8&&prod.price>0&&prod.price<=7.50)return BOM.softPlastic*qty;
-  return 0;
+function matchCostProfile(prod){
+  if(!prod)return null;
+  if(prod.series==="Glidebait")return costProfiles.find(function(c){return c.id==="xg8-glide";})||null;
+  if(prod.series==="JC Walker")return costProfiles.find(function(c){return c.id==="jc-walker";})||null;
+  var n=(prod.name||"").toLowerCase();
+  var match=costProfiles.find(function(c){
+    var cn=c.name.toLowerCase();
+    return n.indexOf(cn)>=0||cn.split(" ").some(function(w){return w.length>=5&&n.indexOf(w)>=0;});
+  });
+  if(match)return match;
+  if(prod.pack>=8&&prod.price>0&&prod.price<=7.50){var fb=costProfiles.find(function(c){return c.unit==="bag";});return fb||{cogs:1.04,unit:"bag",name:"Soft Plastic"};}
+  return null;
 }
+function getItemCOGS(qty,prod){var cp=matchCostProfile(prod);return cp?cp.cogs*qty:0;}
 function calcOrder(log,prods){
   var items=[];try{if(log.items)items=JSON.parse(log.items);}catch(e){}
   var rev=0,cogs=0;
@@ -189,8 +207,10 @@ function showLogin(){
 function render(){
   var html="";
   if(activeTab==="dash")html=dashHTML();
+  else if(activeTab==="prod")html=prodHTML();
   else if(activeTab==="pl")html=plHTML();
   else if(activeTab==="exp")html=expHTML();
+  else if(activeTab==="costs")html=costsHTML();
   else html=reportHTML();
   document.getElementById("app").innerHTML=hdrHTML()+tabsHTML()+'<div class="content">'+html+"</div>";
   wire();
@@ -200,7 +220,7 @@ function hdrHTML(){
   return'<div class="header no-print"><div class="header-inner"><div class="logo"><div class="logo-icon">&#x1F4B0;</div><div><div class="logo-name">JCB Finance</div><div class="logo-sub">Owner Portal</div></div></div><button class="btn-gray" id="btnLogout" style="font-size:11px;padding:6px 12px;">Sign Out</button></div></div>';
 }
 function tabsHTML(){
-  var tabs=[{id:"dash",i:"&#x1F4CA;",l:"Dashboard"},{id:"pl",i:"&#x1F4C8;",l:"P&L"},{id:"exp",i:"&#x1F4CB;",l:"Expenses"},{id:"rep",i:"&#x1F4C4;",l:"Report"}];
+  var tabs=[{id:"dash",i:"&#x1F4CA;",l:"Dashboard"},{id:"prod",i:"&#x1F4E6;",l:"Production"},{id:"pl",i:"&#x1F4C8;",l:"P&L"},{id:"exp",i:"&#x1F4CB;",l:"Expenses"},{id:"costs",i:"&#x1F527;",l:"Costs"},{id:"rep",i:"&#x1F4C4;",l:"Report"}];
   return'<div class="tabs no-print"><div class="tabs-inner">'+tabs.map(function(t){return'<button class="tab'+(activeTab===t.id?" active":"")+'" data-tab="'+t.id+'">'+t.i+" "+t.l+"</button>";}).join("")+"</div></div>";
 }
 function periodBarHTML(){
@@ -219,6 +239,50 @@ function dashHTML(){
   var netBg=s.net>=0?"background:#eff6ff;border:1px solid #bfdbfe;":"background:#fef2f2;border:1px solid #fecaca;";
   var netColor=s.net>=0?"#2563eb":"#dc2626";
   return periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+periodLabel()+" &middot; "+s.orders+' orders</div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+fmt$(s.rev)+'</div><div class="kpi-lbl">Revenue</div></div><div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:#16a34a;">'+fmt$(s.gross)+'</div><div class="kpi-lbl">Gross Profit</div><div class="kpi-sub" style="color:#16a34a;">'+fmtPct(s.grossPct)+'</div></div><div class="kpi" style="'+netBg+'"><div class="kpi-val" style="color:'+netColor+';">'+fmt$(s.net)+'</div><div class="kpi-lbl">Net Profit</div><div class="kpi-sub" style="color:'+netColor+';">'+fmtPct(s.netPct)+'</div></div><div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(s.cogs)+'</div><div class="kpi-lbl">COGS</div></div></div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">Revenue by Channel</div>'+chList.map(function(e){var margin=e[1].rev>0?(e[1].rev-e[1].cogs)/e[1].rev*100:0;return'<div class="bar-row"><div class="bar-label"><span style="font-weight:600;">'+e[0]+'</span><span style="color:#ea580c;font-weight:700;">'+fmt$(e[1].rev)+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">'+fmtPct(margin)+'</span></span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+Math.round((e[1].rev/maxRev)*100)+'%;background:#f97316;"></div></div></div>';}).join("")+'</div>';
+}
+
+function prodHTML(){
+  var fl=getPeriodLogs();
+  var byType={};
+  fl.forEach(function(l){
+    var items=[];try{if(l.items)items=JSON.parse(l.items);}catch(e){}
+    var ch=l.ch||"Other";
+    if(items.length>0){
+      items.forEach(function(item){
+        var p=products.find(function(x){return x.id===item.pid;});
+        var cp=matchCostProfile(p||null);
+        var key=cp?cp.id:(p?p.name:"unknown");
+        if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:"Unknown"),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
+        byType[key].qty+=item.qty;
+        byType[key].cogs+=getItemCOGS(item.qty,p||null);
+        byType[key].rev+=item.qty*getChannelPrice(p||{price:item.price||0,pack:8},ch);
+        if(!byType[key].channels[ch])byType[key].channels[ch]=0;
+        byType[key].channels[ch]+=item.qty;
+      });
+    }else{
+      var p=products.find(function(x){return x.id===l.pid;});
+      var cp=matchCostProfile(p||null);
+      var key=cp?cp.id:(p?p.name:"unknown");
+      if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:"Unknown"),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
+      byType[key].qty+=l.qty;
+      byType[key].cogs+=getItemCOGS(l.qty,p||null);
+      byType[key].rev+=l.qty*getChannelPrice(p||{price:l.price||0,pack:8},ch);
+      if(!byType[key].channels[ch])byType[key].channels[ch]=0;
+      byType[key].channels[ch]+=l.qty;
+    }
+  });
+  if(fl.length===0)return periodBarHTML()+'<div class="section-title">PRODUCTION</div><div class="section-sub">'+periodLabel()+'</div><div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F4E6;</div><div style="font-weight:600;">No production in this period</div></div>';
+  var entries=Object.values(byType).sort(function(a,b){return b.qty-a.qty;});
+  var totalQty=entries.reduce(function(s,t){return s+t.qty;},0);
+  var totalCogs=entries.reduce(function(s,t){return s+t.cogs;},0);
+  var totalRev=entries.reduce(function(s,t){return s+t.rev;},0);
+  var rowsHTML=entries.map(function(t){
+    var chTags=Object.entries(t.channels).map(function(c){return'<span class="exp-cat" style="margin-right:4px;margin-bottom:4px;display:inline-block;">'+c[0]+': '+c[1]+'</span>';}).join("");
+    var gross=t.rev-t.cogs;
+    var margin=t.rev>0?(gross/t.rev*100):0;
+    return'<div class="card" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-weight:700;font-size:14px;">'+t.name+'</div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;">'+t.qty+' '+t.unit+'s</div></div><div style="margin-bottom:10px;">'+chTags+'</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"><div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">COGS</div><div style="font-weight:700;color:#dc2626;font-size:13px;">'+fmt$(t.cogs)+'</div></div><div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Revenue</div><div style="font-weight:700;color:#16a34a;font-size:13px;">'+fmt$(t.rev)+'</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Margin</div><div style="font-weight:700;font-size:13px;">'+fmtPct(margin)+'</div></div></div></div>';
+  }).join("");
+  return periodBarHTML()+'<div class="section-title">PRODUCTION</div><div class="section-sub">'+periodLabel()+' &middot; '+totalQty+' total units made</div>'+rowsHTML+'<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;"><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total COGS</span><span style="color:#dc2626;">'+fmt$(totalCogs)+'</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total Revenue</span><span style="color:#16a34a;">'+fmt$(totalRev)+'</span></div><div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:4px;"><span style="font-weight:700;">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#2563eb;">'+fmt$(totalRev-totalCogs)+'</span></div></div>';
 }
 
 function plHTML(){
@@ -250,6 +314,13 @@ function expHTML(){
     prevHTML='<div class="card" style="border:1px solid #bbf7d0;background:#f0fdf4;margin-bottom:10px;"><div style="font-weight:700;font-size:13px;color:#16a34a;margin-bottom:10px;">&#x2705; '+impPrev.length+' expenses ready to import</div>'+impPrev.slice(0,20).map(function(m){return'<div class="preview-row"><div><span class="exp-cat">'+m.category+'</span><span style="margin-left:8px;font-size:12px;font-weight:600;">'+m.description+'</span></div><span style="font-weight:700;color:#dc2626;">'+fmt$(m.amount)+'</span></div>';}).join("")+'</div><button class="btn-green" id="btnApplyExp" style="width:100%;padding:12px;font-size:14px;margin-bottom:14px;">&#x2705; Apply '+impPrev.length+' Expenses for '+expMonth+'</button>';
   }
   return'<div class="section-title">EXPENSES</div><div class="section-sub">Monthly operating costs</div><div class="field-wrap"><label class="field-label">Select Month</label><input class="field-input" type="month" id="expMonthSel" value="'+expMonth+'"/></div>'+(monthExp.length>0?'<div class="card" style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-weight:700;font-size:13px;">'+MONTHS[parseInt(expMonth.split("-")[1])-1]+" "+expMonth.split("-")[0]+" Expenses</div><div style=\"font-family:'Bebas Neue',cursive;font-size:20px;color:#dc2626;\">"+fmt$(monthTotal)+'</div></div>'+expList+'</div>':"")+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px;">&#x1F4CB; Import Expenses</div><div class="hint-box">Paste from your spreadsheet (tab or comma separated):<br><strong>Category &nbsp;|&nbsp; Description &nbsp;|&nbsp; Amount</strong><br><br>Example:<br>Utilities &nbsp;|&nbsp; Electric bill &nbsp;|&nbsp; 145.00<br>Marketing &amp; Advertising &nbsp;|&nbsp; Instagram ads &nbsp;|&nbsp; 250.00</div><div class="field-wrap"><label class="field-label">Paste data here</label><textarea class="field-input" id="expTA" rows="8" style="resize:vertical;line-height:1.8;">'+(impText||"")+'</textarea></div><button class="btn-outline" id="btnPreviewExp" style="width:100%;margin-bottom:10px;padding:11px;">&#x1F50D; Preview Import</button>'+(impMsg?'<div style="font-size:11px;color:#64748b;margin-bottom:10px;">'+impMsg+'</div>':"")+'</div>'+prevHTML;
+}
+
+function costsHTML(){
+  var rows=costProfiles.map(function(cp,i){
+    return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">'+cp.name+'</div><div style="font-size:10px;color:#94a3b8;margin-top:1px;">per '+cp.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;"><span style="color:#94a3b8;font-weight:600;font-size:13px;">$</span><input type="number" step="0.01" min="0" value="'+cp.cogs.toFixed(2)+'" data-cpidx="'+i+'" class="cp-inp" style="width:84px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#1e293b;font-family:\'DM Sans\',sans-serif;outline:none;"/><button class="del-btn" data-delcp="'+i+'">&#x2715;</button></div></div>';
+  }).join("");
+  return'<div class="section-title">COST PROFILES</div><div class="section-sub">Cost to produce per unit &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
 }
 
 function reportHTML(){
@@ -300,6 +371,31 @@ function wire(){
       expenses=expenses.concat(impPrev);
       impPrev=null;impText="";impMsg="";render();
     }).catch(function(e){showToast("Error: "+e.message,"err");});
+  };
+  document.querySelectorAll(".cp-inp").forEach(function(inp){
+    inp.onchange=function(){
+      var idx=parseInt(inp.dataset.cpidx);
+      var val=parseFloat(inp.value);
+      if(!isNaN(val)&&val>=0){costProfiles[idx].cogs=val;saveCosts();showToast("Saved ✓");}
+      else inp.value=costProfiles[idx].cogs.toFixed(2);
+    };
+  });
+  document.querySelectorAll("[data-delcp]").forEach(function(b){
+    b.onclick=function(){
+      var idx=parseInt(b.dataset.delcp);
+      if(!confirm("Remove "+costProfiles[idx].name+" from cost profiles?"))return;
+      costProfiles.splice(idx,1);saveCosts();render();
+    };
+  });
+  var btnAddCp=document.getElementById("btnAddCp");
+  if(btnAddCp)btnAddCp.onclick=function(){
+    var name=(document.getElementById("cpNewName").value||"").trim();
+    var unit=document.getElementById("cpNewUnit").value;
+    var cogs=parseFloat(document.getElementById("cpNewCogs").value);
+    if(!name||isNaN(cogs)||cogs<0){showToast("Fill in all fields","err");return;}
+    var id=name.toLowerCase().replace(/[^a-z0-9]+/g,"-");
+    costProfiles.push({id:id,name:name,unit:unit,cogs:cogs});
+    saveCosts();showToast("Added "+name+"!");render();
   };
   document.querySelectorAll("[data-delexp]").forEach(function(b){
     b.onclick=function(){
