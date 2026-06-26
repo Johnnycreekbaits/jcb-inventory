@@ -201,7 +201,7 @@ function getPeriodRange(){
   if(period==="lastquarter"){var q=Math.floor(m/3)-1,qy=y;if(q<0){q=3;qy--;}return{start:new Date(qy,q*3,1),end:new Date(qy,q*3+3,0)};}
   if(period==="year")return{start:new Date(y,0,1),end:new Date(y,11,31)};
   if(period==="lastyear")return{start:new Date(y-1,0,1),end:new Date(y-1,11,31)};
-  if(period==="alltime"){var earliest=logs.length>0?logs[logs.length-1].date:"2026-01-01";var ep=earliest.split("-");return{start:new Date(parseInt(ep[0]),parseInt(ep[1])-1,parseInt(ep[2])),end:new Date();};}
+  if(period==="alltime"){var ae=logs.length>0?logs[logs.length-1].date:"2026-01-01";var ap=ae.split("-");return{start:new Date(+ap[0],+ap[1]-1,+ap[2]),end:new Date()};}
 }
 
 function getPeriodMonths(){
