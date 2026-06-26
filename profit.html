@@ -238,24 +238,23 @@ function boot(){
   Promise.all([
     dbGet("products","?order=name,color"),
     dbGet("logs","?order=date.desc"),
-    dbGet("expenses","?order=month.desc,created_at.desc").catch(function(){expReady=false;return[];}),
-    dbGet("cost_profiles","?order=name").catch(function(){return null;})
+    dbGet("expenses","?order=month.desc,created_at.desc").catch(function(){expReady=false;return[];})
   ]).then(function(res){
     products=res[0];logs=res[1];expenses=res[2];
-    var dbCosts=res[3];
-    if(dbCosts===null){
-      // Table not set up yet — keep localStorage values
-    }else if(dbCosts.length===0){
-      // Table exists but empty — seed it from defaults
-      costProfiles=DEFAULT_COSTS.map(function(c){return Object.assign({},c);});
-      dbPost("cost_profiles",costProfiles).catch(function(){});
-    }else{
-      // Use Supabase data as authoritative source
-      costProfiles=dbCosts;
-      mergeMissingDefaults(costProfiles);
-    }
-    localStorage.setItem("jcb_costs",JSON.stringify(costProfiles));
     render();
+    // Load cost profiles after initial render — non-blocking
+    dbGet("cost_profiles","?order=name").catch(function(){return null;}).then(function(dbCosts){
+      if(dbCosts===null)return;
+      if(dbCosts.length===0){
+        costProfiles=DEFAULT_COSTS.map(function(c){return Object.assign({},c);});
+        dbPost("cost_profiles",costProfiles).catch(function(){});
+      }else{
+        costProfiles=dbCosts;
+        mergeMissingDefaults(costProfiles);
+      }
+      localStorage.setItem("jcb_costs",JSON.stringify(costProfiles));
+      render();
+    });
   }).catch(function(e){
     document.getElementById("app").innerHTML='<div class="loading"><div style="font-size:36px;">&#x26A0;&#xFE0F;</div><div style="margin-top:12px;font-weight:700;color:#dc2626;">Connection error</div><div style="font-size:12px;color:#64748b;margin-top:6px;">'+e.message+'</div><button onclick="boot()" style="margin-top:20px;background:#ea580c;color:#fff;border:none;border-radius:10px;padding:11px 24px;font-weight:700;font-size:13px;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Try Again</button></div>';
   });
