@@ -367,8 +367,16 @@ function boot(){
   });
 }
 
+function isTypingInApp(){
+  var el=document.activeElement;
+  if(!el)return false;
+  var tag=el.tagName;
+  if(tag!=="INPUT"&&tag!=="TEXTAREA"&&tag!=="SELECT")return false;
+  var appEl=document.getElementById("app");
+  return !!(appEl&&appEl.contains(el));
+}
 function doRefresh(){
-  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();render();}).catch(function(){});
+  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();if(!isTypingInApp())render();}).catch(function(){});
 }
 setInterval(doRefresh,10000);
 
@@ -579,7 +587,7 @@ function addModal(editId){
   var colorOpts=COLORS.map(function(c){return'<option value="'+c.n+'"'+(p.color===c.n?" selected":"")+">"+c.n+"</option>";}).join("");
   var customColorVal=(p.color&&!COLORS.find(function(c){return c.n===p.color;}))?p.color:"";
   var seriesOpts=SERIES.filter(function(s){return s!=="All";}).map(function(s){return'<option value="'+s+'"'+(p.series===s?" selected":"")+">"+s+"</option>";}).join("");
-  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mItem"><div class="modal sheet"><div class="modal-header"><div class="modal-title">'+(editId?"EDIT":"NEW VARIANT")+'</div><button class="close-btn" id="mClose">&times;</button></div>'+finputs+'<div class="field-wrap"><label class="field-label">Color</label><select class="field-input" id="f_color"><option value="">No color</option>'+colorOpts+'<option value="__custom__">+ Add custom color...</option></select></div><div class="field-wrap" id="customColorWrap" style="display:'+(customColorVal?"block":"none")+'"><label class="field-label">Custom Color Name</label><input class="field-input" id="f_custom_color" placeholder="e.g. Melon with Black & Red Flake" value="'+customColorVal+'"/></div><div class="field-wrap"><label class="field-label">Series</label><select class="field-input" id="f_series">'+seriesOpts+'</select></div><button class="btn-primary" id="mSave" style="width:100%;font-size:14px;padding:13px;margin-top:8px;">'+(editId?"Save Changes":"Add Variant")+"</button></div></div>");
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mItem"><div class="modal sheet"><div class="modal-header"><div class="modal-title">'+(editId?"EDIT":"NEW VARIANT")+'</div><button class="close-btn" id="mClose">&times;</button></div>'+finputs+'<div class="field-wrap"><label class="field-label">Color</label><select class="field-input" id="f_color"><option value="">No color</option>'+colorOpts+'<option value="__custom__"'+(customColorVal?" selected":"")+'>+ Add custom color...</option></select></div><div class="field-wrap" id="customColorWrap" style="display:'+(customColorVal?"block":"none")+'"><label class="field-label">Custom Color Name</label><input class="field-input" id="f_custom_color" placeholder="e.g. Melon with Black & Red Flake" value="'+customColorVal+'"/></div><div class="field-wrap"><label class="field-label">Series</label><select class="field-input" id="f_series">'+seriesOpts+'</select></div><button class="btn-primary" id="mSave" style="width:100%;font-size:14px;padding:13px;margin-top:8px;">'+(editId?"Save Changes":"Add Variant")+"</button></div></div>");
   document.getElementById("mClose").onclick=function(){document.getElementById("mItem").remove();};
   document.getElementById("mSave").onclick=function(){
     var name=document.getElementById("f_name").value.trim();
