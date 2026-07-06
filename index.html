@@ -396,8 +396,10 @@ function addToCart(prod){
 }
 
 function openVarietyPackModal(prod){
-  var nekos=products.filter(function(p){return p.series==="Nekos";}).sort(function(a,b){return b.qty-a.qty;}).slice(0,4);
-  var worms=products.filter(function(p){return p.series==="Finesse Worms";}).sort(function(a,b){return b.qty-a.qty;}).slice(0,3);
+  var rg=products.find(function(p){return p.color==="Ringo's Gift"&&(p.series==="Finesse Worms"||p.series==="Nekos");});
+  var nekos=products.filter(function(p){return p.series==="Nekos"&&(!rg||p.id!==rg.id);}).sort(function(a,b){return b.qty-a.qty;}).slice(0,4);
+  var worms=(rg&&rg.series==="Finesse Worms"?[rg]:[]).concat(products.filter(function(p){return p.series==="Finesse Worms"&&(!rg||p.id!==rg.id);}).sort(function(a,b){return b.qty-a.qty;}).slice(0,rg&&rg.series==="Finesse Worms"?2:3));
+  if(rg&&rg.series==="Nekos")nekos=[rg].concat(nekos.slice(0,3));
   if(nekos.length<4){showToast("Not enough Neko SKUs (need at least 4 colors)","err");return;}
   if(worms.length<3){showToast("Not enough Finesse Worm SKUs (need at least 3 colors)","err");return;}
   var components=nekos.concat(worms);
@@ -539,8 +541,10 @@ function invHTML(){
   var cards=f.map(function(p){
     var st=STATUS[getStatus(p.qty,p.min)];
     if(p.id===1201){
-      var vpNekos=products.filter(function(x){return x.series==="Nekos";}).sort(function(a,b){return b.qty-a.qty;}).slice(0,4);
-      var vpWorms=products.filter(function(x){return x.series==="Finesse Worms";}).sort(function(a,b){return b.qty-a.qty;}).slice(0,3);
+      var vprg=products.find(function(x){return x.color==="Ringo's Gift"&&(x.series==="Finesse Worms"||x.series==="Nekos");});
+      var vpNekos=products.filter(function(x){return x.series==="Nekos"&&(!vprg||x.id!==vprg.id);}).sort(function(a,b){return b.qty-a.qty;}).slice(0,4);
+      var vpWorms=(vprg&&vprg.series==="Finesse Worms"?[vprg]:[]).concat(products.filter(function(x){return x.series==="Finesse Worms"&&(!vprg||x.id!==vprg.id);}).sort(function(a,b){return b.qty-a.qty;}).slice(0,vprg&&vprg.series==="Finesse Worms"?2:3));
+      if(vprg&&vprg.series==="Nekos")vpNekos=[vprg].concat(vpNekos.slice(0,3));
       var nekoRows=vpNekos.map(function(x){return'<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;border-bottom:1px solid #fde68a;">'+
         '<div style="display:flex;align-items:center;gap:5px;">'+dotHtml(x.color)+'<span>'+(x.color||x.name)+'</span>'+(x.loc?'<span style="color:#94a3b8;font-size:10px;">'+x.loc+'</span>':'')+'</div>'+
         '<span style="color:'+(x.qty>0?'#16a34a':'#dc2626')+';font-weight:700;">'+x.qty+' in stock</span></div>';}).join("");
