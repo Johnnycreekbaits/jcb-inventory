@@ -159,7 +159,7 @@ function matchCostProfile(prod){
   return match||null;
 }
 function getItemCOGS(qty,prod){var cp=matchCostProfile(prod);return cp?cp.cogs*qty:0;}
-function calcInventoryValue(){var total=0;products.forEach(function(p){var cp=matchCostProfile(p);if(cp)total+=p.qty*cp.cogs;});return total;}
+function calcInventoryValue(){var total=0;products.forEach(function(p){if(p.series==="Bundles")return;var cp=matchCostProfile(p);if(cp)total+=p.qty*cp.cogs;});return total;}
 function calcAccountsReceivable(){
   var total=0,count=0;
   logs.filter(function(l){return(l.ch==="Dealer"||l.ch==="Distro")&&l.st==="Out"&&!l.paid;}).forEach(function(l){
