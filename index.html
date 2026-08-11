@@ -850,6 +850,7 @@ function editOrderModal(id){
   document.getElementById("mEOClose").onclick=function(){document.getElementById("mEditOrder").remove();};
   document.getElementById("mEditOrder").onclick=function(e){if(e.target===this)this.remove();};
   document.getElementById("btnSaveOrder").onclick=function(){
+    var saveBtn=this;if(saveBtn.disabled)return;saveBtn.disabled=true;saveBtn.textContent="Saving...";
     var newPerson=document.getElementById("ePerson").value.trim();
     var newChannel=document.getElementById("eChannel").value;
     var newProject=document.getElementById("eProject").value.trim();
@@ -879,7 +880,7 @@ function editOrderModal(id){
     });
     chain=chain.then(function(){return dbPatch("logs","id=eq."+id,{person:newPerson,ch:newChannel,project:newProject,date:newDate,qty:newTotalQty,price:newTotalQty>0?newTotalVal/newTotalQty:0,items:JSON.stringify({state:newState,items:updatedItems})});});
     chain=chain.then(function(){if(!changes.length)return;return logHistory({id:id,name:log.name,color:""},0,0,"order-edit",currentUser,log.name+" edited — "+changes.join("; "));});
-    chain.then(function(){showToast("Order updated!");document.getElementById("mEditOrder").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");});
+    chain.then(function(){showToast("Order updated!");document.getElementById("mEditOrder").remove();return doRefresh();}).catch(function(e){showToast("Error: "+e.message,"err");saveBtn.disabled=false;saveBtn.textContent="Save Changes";});
   };
 }
 
