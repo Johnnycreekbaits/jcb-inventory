@@ -533,8 +533,19 @@ function tabsHTML(){
   return'<div class="tabs"><div class="tabs-inner">'+tabs.map(function(t){return'<button class="tab'+(activeTab===t.id?" active":"")+'" data-tab="'+t.id+'">'+t.i+" "+t.l+"</button>";}).join("")+"</div></div>";
 }
 
+// Every word in the query must appear somewhere (any order, extra spaces ignored)
+function matchesSearch(p){
+  var words=search.toLowerCase().split(/\s+/).filter(Boolean);
+  if(!words.length)return true;
+  var hay=[p.name,p.color||"",p.sku||"",p.barcode||"",p.loc||"",p.series||""].join(" ").toLowerCase();
+  return words.every(function(w){return hay.indexOf(w)>=0;});
+}
 function invHTML(){
-  var f=products.filter(function(p){return activeSeries==="All"||p.series===activeSeries;}).filter(function(p){return !activeStockFilter||getStatus(p.qty,p.min)===activeStockFilter;}).filter(function(p){return [p.name,p.color||"",p.sku||"",p.barcode||"",p.loc||""].join(" ").toLowerCase().indexOf(search.toLowerCase())>=0;}).sort(function(a,b){var n=a.name.localeCompare(b.name);return n!==0?n:(a.color||"").localeCompare(b.color||"");});
+  var searchHits=products.filter(matchesSearch);
+  var f=searchHits.filter(function(p){return activeSeries==="All"||p.series===activeSeries;}).filter(function(p){return !activeStockFilter||getStatus(p.qty,p.min)===activeStockFilter;}).sort(function(a,b){var n=a.name.localeCompare(b.name);return n!==0?n:(a.color||"").localeCompare(b.color||"");});
+  var hiddenCount=search.trim()?searchHits.length-f.length:0;
+  var hiddenWhere=[activeSeries!=="All"?activeSeries:"",activeStockFilter?activeStockFilter+" stock":""].filter(Boolean).join(" + ");
+  var hiddenHint=hiddenCount>0?'<button id="btnShowAllHits" style="display:block;width:100%;text-align:left;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;margin-bottom:10px;cursor:pointer;">'+hiddenCount+" more match"+(hiddenCount===1?"":"es")+" hidden by the "+hiddenWhere+" filter &mdash; tap to show all</button>":"";
   var low=products.filter(function(p){return getStatus(p.qty,p.min)==="Low";}).length;
   var out=products.filter(function(p){return getStatus(p.qty,p.min)==="Out";}).length;
   var bc=products.filter(function(p){return p.barcode;}).length;
@@ -567,7 +578,7 @@ function invHTML(){
   // Build unique color list from products
   var allColors=[...new Set(products.map(function(p){return p.color;}).filter(Boolean))].sort();
   var colorTabs=allColors.map(function(c){return'<button class="series-btn'+(search===c?" active":"")+'" data-colorsearch="'+c+'" style="display:flex;align-items:center;gap:4px;">'+dotHtml(c,8)+c+'</button>';}).join("");
-  return'<button class="btn-primary" id="btnReceiveProd" style="width:100%;margin-bottom:10px;font-size:13px;padding:10px;">+ Receive Production Run</button><div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><button data-stockfilter="Low" class="kpi" style="background:#fffbeb;border:2px solid '+(activeStockFilter==="Low"?"#d97706":"#fde68a")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Low"?"0 0 0 2px #fde68a":"none")+';"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></button><button data-stockfilter="Out" class="kpi" style="background:#fef2f2;border:2px solid '+(activeStockFilter==="Out"?"#dc2626":"#fecaca")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Out"?"0 0 0 2px #fecaca":"none")+';"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></button><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+search+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div style="margin-bottom:8px;"><div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:6px;">SEARCH BY COLOR</div><div class="series-bar">'+colorTabs+'</div></div><div class="count-label">'+f.length+" VARIANTS</div>"+cards;
+  return'<button class="btn-primary" id="btnReceiveProd" style="width:100%;margin-bottom:10px;font-size:13px;padding:10px;">+ Receive Production Run</button><div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><button data-stockfilter="Low" class="kpi" style="background:#fffbeb;border:2px solid '+(activeStockFilter==="Low"?"#d97706":"#fde68a")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Low"?"0 0 0 2px #fde68a":"none")+';"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></button><button data-stockfilter="Out" class="kpi" style="background:#fef2f2;border:2px solid '+(activeStockFilter==="Out"?"#dc2626":"#fecaca")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Out"?"0 0 0 2px #fecaca":"none")+';"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></button><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+escAttr(search)+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div style="margin-bottom:8px;"><div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:6px;">SEARCH BY COLOR</div><div class="series-bar">'+colorTabs+'</div></div><div class="count-label">'+f.length+" VARIANTS</div>"+hiddenHint+cards;
 }
 
 function coHTML(){
@@ -940,7 +951,15 @@ function wire(){
   var btnCO2=document.getElementById("btnCO2");if(btnCO2)btnCO2.onclick=function(){activeTab="inv";render();};
   var btnScan=document.getElementById("btnScan");if(btnScan)btnScan.onclick=function(){openScanner();};
   var btnR=document.getElementById("btnRefresh");if(btnR)btnR.onclick=function(){btnR.textContent="...";doRefresh().then(function(){btnR.textContent="&#x1F504;";});};
-  var si=document.getElementById("searchInput");if(si)si.oninput=function(e){var pos=e.target.selectionStart;search=e.target.value;render();var ns=document.getElementById("searchInput");if(ns){ns.focus();ns.setSelectionRange(pos,pos);}};
+  var si=document.getElementById("searchInput");if(si){
+    var composing=false;
+    var applySearch=function(){var pos=si.selectionStart;search=si.value;render();var ns=document.getElementById("searchInput");if(ns){ns.focus();ns.setSelectionRange(pos,pos);}};
+    // Don't re-render mid-word while a phone keyboard is composing text
+    si.addEventListener("compositionstart",function(){composing=true;});
+    si.addEventListener("compositionend",function(){composing=false;applySearch();});
+    si.oninput=function(e){if(composing||e.isComposing)return;applySearch();};
+  }
+  var bsa=document.getElementById("btnShowAllHits");if(bsa)bsa.onclick=function(){activeSeries="All";activeStockFilter=null;render();};
   document.querySelectorAll(".series-btn").forEach(function(b){b.onclick=function(){activeSeries=b.dataset.series;render();};});
   document.querySelectorAll("[data-stockfilter]").forEach(function(b){b.onclick=function(){activeStockFilter=activeStockFilter===b.dataset.stockfilter?null:b.dataset.stockfilter;render();};});
   // Color search tabs

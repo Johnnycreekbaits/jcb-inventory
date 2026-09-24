@@ -93,3 +93,8 @@ with the code. Update the sections above if architecture changed.
   rolled back with `correction` history entries.
 - **2026-09-24** — Rebuilt this file as the durable project memory; added
   `CLAUDE.local.md` for private business context.
+- **2026-09-24** — Stock search fix: "Melon Purple Flake" wasn't found from desktop search.
+  Search now matches each word separately in any order (`matchesSearch()`), also searches
+  series, shows a "N more matches hidden by the <series/stock> filter — tap to show all"
+  button when tabs hide results, escapes the search box value, and skips re-render during
+  mobile keyboard composition. No fuzzy matching (typos like "flk" still return nothing).
