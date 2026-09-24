@@ -305,6 +305,7 @@ var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","D
 var TODAY=new Date().toISOString().slice(0,10);
 
 var products=[],logs=[],auditLog=[],labelDefs=[],adjInFlight=new Set();
+var retInFlight=new Set();
 var activeTab="inv",search="",activeSeries="All",activeStockFilter=null,logFilter="All",histFilter="All",activeLabelProduct=null;
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
 var lastSync=null,cart=JSON.parse(localStorage.getItem("jcb_cart")||"[]"),currentUser=localStorage.getItem("jcb_user")||"",currentChannel="DTC";
@@ -440,7 +441,9 @@ function openVarietyPackModal(prod){
   };
 }
 
+var orderInFlight=false;
 function confirmOrder(){
+  if(orderInFlight)return;
   if(cart.length===0){showToast("Cart is empty","err");return;}
   var person=document.getElementById("orderPerson")?document.getElementById("orderPerson").value:"";
   var channel=document.getElementById("orderChannel")?document.getElementById("orderChannel").value:"DTC";
@@ -466,6 +469,8 @@ function confirmOrder(){
   var totalQty=cartCopy.reduce(function(s,i){return s+(i.components?i.components.length*i.qty:i.qty);},0);
   var totalVal=cartCopy.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
   var first=cartCopy[0];
+  orderInFlight=true;
+  var cb=document.getElementById("btnConfirmOrder");if(cb){cb.disabled=true;cb.textContent="Confirming...";}
   dbGet("logs","?select=name&order=name.desc&limit=50").then(function(allLogs){
     var last=0;
     if(allLogs&&allLogs.length>0){for(var i=0;i<allLogs.length;i++){var m=allLogs[i].name&&allLogs[i].name.match(/^ORD-(\d+)$/);if(m){last=parseInt(m[1],10)||0;break;}}};
@@ -506,7 +511,10 @@ function confirmOrder(){
     cart=[];saveCart();
     showToast("Order confirmed! "+totalQty+" bags out");
     return doRefresh();
-  }).catch(function(e){showToast("Order failed: "+e.message,"err");});
+  }).catch(function(e){showToast("Order failed: "+e.message,"err");}).then(function(){
+    orderInFlight=false;
+    var cb=document.getElementById("btnConfirmOrder");if(cb){cb.disabled=false;cb.textContent="Confirm Order";}
+  });
 }
 
 function render(){
@@ -875,18 +883,22 @@ function editOrderModal(id){
     if(newDate!==log.date)changes.push("date: "+log.date+" → "+newDate);
     if(newState!==ordState)changes.push("state: "+(ordState||"—")+" → "+(newState||"—"));
     var updatedItems=editItems.map(function(item){var p=products.find(function(x){return x.id===item.pid;});return Object.assign({},item,{price:getChannelPrice(p||{price:item.price,pack:8},newChannel)});});
-    var newTotalQty=updatedItems.reduce(function(s,i){return s+i.qty;},0);
+    var newTotalQty=updatedItems.reduce(function(s,i){return s+(i.components?i.components.length*i.qty:i.qty);},0);
     var newTotalVal=updatedItems.reduce(function(s,i){return s+(i.qty*(i.price||0));},0);
     var chain=Promise.resolve();
     origItems.forEach(function(orig,idx){
       var updated=editItems[idx];if(!updated)return;
       var qtyDiff=updated.qty-orig.qty;if(qtyDiff===0)return;
-      chain=chain.then(function(){
-        var p=products.find(function(x){return x.id===orig.pid;});if(!p)return;
-        var oldInv=p.qty;var newInv=Math.max(0,oldInv-qtyDiff);
-        products=products.map(function(x){return x.id===p.id?Object.assign({},x,{qty:newInv}):x;});
-        changes.push(orig.name+(orig.color?" - "+orig.color:"")+" qty: "+orig.qty+" → "+updated.qty);
-        return dbPatch("products","id=eq."+p.id,{qty:newInv}).then(function(){return logHistory(p,oldInv,newInv,"order-edit",currentUser,log.name+" item qty adjusted");});
+      changes.push(orig.name+(orig.color?" - "+orig.color:"")+" qty: "+orig.qty+" → "+updated.qty);
+      // Variety Packs adjust their component bags, not the bundle itself
+      var adjusts=orig.components?orig.components.map(function(c){return{pid:c.pid,diff:c.qty*qtyDiff};}):[{pid:orig.pid,diff:qtyDiff}];
+      adjusts.forEach(function(a){
+        chain=chain.then(function(){
+          var p=products.find(function(x){return x.id===a.pid;});if(!p)return;
+          var oldInv=p.qty;var newInv=Math.max(0,oldInv-a.diff);
+          products=products.map(function(x){return x.id===p.id?Object.assign({},x,{qty:newInv}):x;});
+          return dbPatch("products","id=eq."+p.id,{qty:newInv}).then(function(){return logHistory(p,oldInv,newInv,"order-edit",currentUser,log.name+" item qty adjusted");});
+        });
       });
     });
     chain=chain.then(function(){return dbPatch("logs","id=eq."+id,{person:newPerson,ch:newChannel,project:newProject,date:newDate,qty:newTotalQty,price:newTotalQty>0?newTotalVal/newTotalQty:0,items:JSON.stringify({state:newState,items:updatedItems})});});
@@ -1018,11 +1030,20 @@ function wire(){
   document.querySelectorAll("[data-editorder]").forEach(function(b){b.onclick=function(e){e.stopPropagation();editOrderModal(parseInt(b.dataset.editorder));};});
   document.querySelectorAll("[data-ret]").forEach(function(b){b.onclick=function(e){e.stopPropagation();
     var id=parseInt(b.dataset.ret);var log=logs.find(function(l){return l.id===id;});if(!log)return;
+    if(retInFlight.has(id)||log.st!=="Out")return;
+    if(!confirm("Return "+(log.name||"this order")+" and put its stock back?"))return;
+    retInFlight.add(id);b.disabled=true;b.textContent="Returning...";
     dbPatch("logs","id=eq."+id,{ret:TODAY,st:"Returned"}).then(function(){
       var parsed=parseOrderItems(log.items);var items=parsed.items;
       if(items.length>0){
         var chain=Promise.resolve();
+        // Variety Packs restock their component bags, not the bundle itself
+        var restock=[];
         items.forEach(function(item){
+          if(item.components)item.components.forEach(function(c){restock.push({pid:c.pid,name:c.name,color:c.color,qty:c.qty*item.qty});});
+          else restock.push(item);
+        });
+        restock.forEach(function(item){
           chain=chain.then(function(){
             var p=products.find(function(x){return x.id===item.pid;});
             if(!p)return;
@@ -1035,7 +1056,7 @@ function wire(){
         var p=products.find(function(x){return x.id===log.pid;});
         if(p){var before=p.qty;var nq=before+log.qty;p.qty=nq;return dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){return logHistory(p,before,nq,"return",currentUser,"Return from "+(log.person||"customer"));});}
       }
-    }).then(function(){showToast("Returned!");return doRefresh();}).catch(function(){showToast("Error","err");});
+    }).then(function(){showToast("Returned!");return doRefresh();}).catch(function(){showToast("Error","err");}).then(function(){retInFlight.delete(id);});
   };});
   var oc=document.getElementById("orderChannel");
   if(oc){oc.value=currentChannel;oc.onchange=function(e){currentChannel=e.target.value;render();};}

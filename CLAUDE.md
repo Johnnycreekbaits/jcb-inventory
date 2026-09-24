@@ -48,8 +48,10 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - Cost profiles load from Supabase non-blocking, localStorage fallback
 - `adjInFlight` Set guards +/− stock buttons against double-fire
 - **Rule:** any button that triggers a Supabase write chain needs a double-submit guard
-  (disable + "Saving..."). `btnSaveOrder` has one; `btnConfirmOrder` and the
-  return-order `[data-ret]` handler have NOT been audited yet.
+  (disable + "Saving..."). `btnSaveOrder`, `confirmOrder()` (`orderInFlight`) and the
+  return-order `[data-ret]` handler (`retInFlight` Set + confirm prompt) all have one.
+- Variety Pack order lines (pid 1201) carry a `components` array. Any code that moves stock
+  for an order (checkout, return, edit) must adjust the component bags, never pid 1201.
 - Variety Pack (Bundles): always Ringo's Gift + top Nekos/Finesse Worms by stock
 - Bundles series excluded from inventory value
 
@@ -98,3 +100,7 @@ with the code. Update the sections above if architecture changed.
   series, shows a "N more matches hidden by the <series/stock> filter — tap to show all"
   button when tabs hide results, escapes the search box value, and skips re-render during
   mobile keyboard composition. No fuzzy matching (typos like "flk" still return nothing).
+- **2026-09-24** — Double-submit audit: added guards to Confirm Order and Return (Return
+  also now asks for confirmation). Fixed Return and Edit Order moving stock on the Variety
+  Pack bundle (pid 1201) instead of its 7 component bags. Verified no past data was
+  affected (no history on 1201; ORD-0029, the only bundle order, never edited/returned).
