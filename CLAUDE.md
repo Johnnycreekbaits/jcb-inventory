@@ -17,7 +17,8 @@ All pages are single-file HTML/CSS/JS — no build step, no framework, no npm. K
 
 - **Repo:** https://github.com/Johnnycreekbaits/jcb-inventory
 - **Deploy:** push to `main` → GitHub Pages rebuilds (~2 min). `.github/workflows/deploy.yml`
-- **Linode VPS:** also hosts a copy (HTTP only) — prefer the GitHub Pages URL.
+- **Linode VPS:** `173.255.221.37` also hosts a copy at http://173.255.221.37 (HTTP only) —
+  prefer the GitHub Pages URL to avoid the "Not Secure" warning.
 - **Credentials:** `.env` (never committed) — SSH, GitHub, Supabase keys.
 
 ## Supabase
@@ -62,8 +63,17 @@ DM Sans + Bebas Neue. Brand: orange `#E8A023`, navy `#1B1E5F`, blue `#3878C8`
 - After changes: commit with a clear message, push to `main` when the user approves.
 
 ## "Load" Command
-When the user says **"Load"** / **"Load JCBData"**: read `.env`, check GitHub open issues
-and recent commits, read the Session Log below, and summarize current state + next step.
+When the user says **"Load"** / **"Load JCBData"**, do the following automatically:
+
+1. **Read `.env`** — confirm SSH (`SSH_HOST`, `SSH_USER`, `SSH_PASS`) and GitHub values are present
+2. **Fetch GitHub state:** open issues (`https://api.github.com/repos/Johnnycreekbaits/jcb-inventory/issues`)
+   and recent commits (`git log --oneline -10`)
+3. **Check the Linode server** (`173.255.221.37`) — SSH in and report:
+   - Running services (`systemctl list-units --type=service --state=running`)
+   - Disk/memory (`df -h`, `free -h`)
+   - Deployed web content (`ls /var/www`, `ls /home`, `pm2 list` if available)
+4. **Read the Session Log** below
+5. **Summarize:** server vs. GitHub, open issues, open follow-ups, and the recommended next step
 
 ## Session Log Rule
 At the end of any session that changes these apps or their data, append a dated entry
