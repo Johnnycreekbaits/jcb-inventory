@@ -1,36 +1,85 @@
 # JCBData — Claude Context
 
-## Project: Johnny Creek Baits Inventory App
-A self-contained single-file inventory management app (`index.html`) for Johnny Creek Baits.
+Johnny Creek Baits inventory + finance apps. This file is the durable memory for Claude
+across sessions — **keep it current** (see "Session Log Rule" below).
+
+> ⚠️ This repo is PUBLIC. Never put credentials, passwords, COGS/margins, or investor
+> details in this file. Those go in `CLAUDE.local.md` (gitignored, auto-loaded by Claude).
+
+## Apps
+All pages are single-file HTML/CSS/JS — no build step, no framework, no npm. Keep it that way.
+
+| File | Purpose | Live URL |
+|---|---|---|
+| `index.html` | Inventory app — tabs: Stock, Checkout, Labels, Reports, History, Import, Export | https://johnnycreekbaits.github.io/jcb-inventory/ |
+| `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Production, P&L, Expenses, Costs, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
+| `production-schedule.html` | Printable production schedule (not yet committed) | — |
+
 - **Repo:** https://github.com/Johnnycreekbaits/jcb-inventory
-- **Stack:** Pure HTML/CSS/JS — no build step, no framework, no dependencies except Google Fonts
-- **Hosting:** GitHub Pages (live from `main` branch) + Linode VPS (`173.255.221.37`)
-- **Live URL (HTTPS):** https://johnnycreekbaits.github.io/jcb-inventory/
-- **Linode URL (HTTP only):** http://173.255.221.37 — use GitHub Pages URL instead to avoid "Not Secure" warning
-- **Status:** Active — 2 open issues, last push today (2026-06-02), no README yet
+- **Deploy:** push to `main` → GitHub Pages rebuilds (~2 min). `.github/workflows/deploy.yml`
+- **Linode VPS:** also hosts a copy (HTTP only) — prefer the GitHub Pages URL.
+- **Credentials:** `.env` (never committed) — SSH, GitHub, Supabase keys.
 
-## Credentials
-All sensitive values live in `.env` (never committed):
-- `SSH_HOST`, `SSH_USER`, `SSH_PASS` — Linode VPS access
-- `GITHUB_REPO` — https://github.com/Johnnycreekbaits/jcb-inventory
+## Supabase
+Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnasxasmwzvywgkgdu
 
-## "Load" Command
-When the user says **"Load"** or **"Load JCBData"**, do the following automatically:
+- `products` — SKUs (id, name, color, series, sku, barcode, price, pack, qty, min, loc)
+- `logs` — checkout orders (id, name, pid, date, qty, price, ch, st, items, person, project, ret, paid)
+  - `items` is JSON: new format `{state:"XX", items:[{pid,name,color,qty,price}]}`; old format is a plain array
+  - `paid` = date string paid (null = unpaid) — drives AR in finance app
+- `history` — audit log (JS var is `auditLog`, to avoid clashing with `window.history`)
+- `expenses` — monthly expenses (month, category, amount, description, created_by)
+- `cost_profiles` — COGS per product (id, name, series, unit, cogs); seeded on first load
 
-1. **Read `.env`** — confirm SSH and GitHub values are present
-2. **Fetch GitHub state:**
-   - Check open issues: `https://api.github.com/repos/Johnnycreekbaits/jcb-inventory/issues`
-   - List repo files: `https://api.github.com/repos/Johnnycreekbaits/jcb-inventory/contents`
-   - Note: there is currently no README — the source of truth is `index.html`
-3. **Check the server** — SSH in and report:
-   - Running services (`systemctl list-units --type=service --state=running`)
-   - Disk/memory (`df -h`, `free -h`)
-   - Deployed web content (`ls /var/www`, `ls /home`, `pm2 list` if available)
-4. **Summarize:** what's deployed on the server vs. what's in GitHub, open issues, and the recommended next step
+## Channels & Pricing (index.html)
+`["DTC","Dealer","Distro","Pro Staff","Sponsorship/Promo","Internal"]`
+- Sponsorship/Promo, Internal, Sample/Promo → $0 revenue
+- JC Walker: Dealer/Distro → $10.99
+- Soft plastics (pack≥8, price≤$7.50): Dealer $3.50, Distro $2.80, Pro Staff $5.00
+- Everything else: stored `item.price` from checkout
+
+## Key Functions / Architecture
+- `parseItems(raw)` — handles both `log.items` formats
+- `matchCostProfile(prod)` — matches series first, then name substring
+- `calcOrder(log, prods)` — uses stored item.price (not recalculated from channel)
+- `getPeriodLogs()` — filters by local date string, excludes `st="Returned"`
+- Finance auth: `localStorage.getItem("jcb_finance_auth")`
+- Cost profiles load from Supabase non-blocking, localStorage fallback
+- `adjInFlight` Set guards +/− stock buttons against double-fire
+- **Rule:** any button that triggers a Supabase write chain needs a double-submit guard
+  (disable + "Saving..."). `btnSaveOrder` has one; `btnConfirmOrder` and the
+  return-order `[data-ret]` handler have NOT been audited yet.
+- Variety Pack (Bundles): always Ringo's Gift + top Nekos/Finesse Worms by stock
+- Bundles series excluded from inventory value
+
+## Style
+DM Sans + Bebas Neue. Brand: orange `#E8A023`, navy `#1B1E5F`, blue `#3878C8`
+(older pages use `#f97316` orange). KPI tiles = big Bebas Neue number + colored border.
 
 ## Working Style
-- This is a single-file app — all edits go into `index.html`
-- No build tools, no npm, no bundler — keep it that way unless explicitly asked to change
-- Always reference `.env` for credentials rather than asking the user to re-type them
-- Before any server change, state the exact command you'll run
-- When adding features, keep styles consistent with existing DM Sans / Bebas Neue / orange (`#f97316`) brand
+- Before any server change, state the exact command.
+- Read `.env` for credentials rather than asking the user.
+- After changes: commit with a clear message, push to `main` when the user approves.
+
+## "Load" Command
+When the user says **"Load"** / **"Load JCBData"**: read `.env`, check GitHub open issues
+and recent commits, read the Session Log below, and summarize current state + next step.
+
+## Session Log Rule
+At the end of any session that changes these apps or their data, append a dated entry
+below (what changed, why, any data corrections, open follow-ups) and commit it along
+with the code. Update the sections above if architecture changed.
+
+## Session Log
+- **2026-06 (build)** — Built both apps. Fixes C1–C5 (channel pricing, returns, revenue),
+  I1–I13 (COGS profiles, date boundaries, sponsorship tracking, inventory value,
+  shareholder report), N1–N4, N6–N9 (invoice print/PDF, Receive Production Run,
+  Mark as Paid + AR, "All Time" period, persistent finance auth). Skipped N5, N11.
+- **2026-06/07** — Invoice shows GS1 barcode; order modal scroll fix; Paid/Unpaid filters
+  + clickable AR tile; checkout keyboard + product color reset fixes; Edit Order channel
+  reset fix; dynamic Variety Pack; Bundles excluded from inventory value.
+- **2026-08-11** — Fixed Edit Order double-submit (commit `da29121`). ORD-0040 had doubled
+  restock (+36 vs +18) on 24 products (ids 101–106, 201–206, 301–306, 401–406);
+  rolled back with `correction` history entries.
+- **2026-09-24** — Rebuilt this file as the durable project memory; added
+  `CLAUDE.local.md` for private business context.
