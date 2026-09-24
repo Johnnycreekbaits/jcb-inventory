@@ -32,6 +32,15 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - `expenses` — monthly expenses (month, category, amount, description, created_by)
 - `cost_profiles` — COGS per product (id, name, series, unit, cogs); seeded on first load
 
+## Backups
+- `backup_supabase.py` exports all 5 tables (JSON + CSV) to
+  `G:\My Drive\JCB Backups\Supabase\<YYYY-MM-DD_HHMM>\` (Google Drive desktop sync).
+- Runs daily at 9pm via Windows Task Scheduler task **"JCB Supabase Backup"** (catches up
+  if the PC was off). Manual run: double-click `Backup-Supabase.bat`.
+- Needs `SUPABASE_URL` / `SUPABASE_KEY` in `.env`. Each folder has `_summary.json` with row counts.
+- Restore: use the `.json` files — POST rows back via `/rest/v1/<table>` or import the CSV in
+  the Supabase Table Editor. Always back up current state before restoring.
+
 ## Channels & Pricing (index.html)
 `["DTC","Dealer","Distro","Pro Staff","Sponsorship/Promo","Internal"]`
 - Sponsorship/Promo, Internal, Sample/Promo → $0 revenue
@@ -104,3 +113,6 @@ with the code. Update the sections above if architecture changed.
   also now asks for confirmation). Fixed Return and Edit Order moving stock on the Variety
   Pack bundle (pid 1201) instead of its 7 component bags. Verified no past data was
   affected (no history on 1201; ORD-0029, the only bundle order, never edited/returned).
+- **2026-09-24** — Added daily Supabase backup to Google Drive (`backup_supabase.py`,
+  scheduled task "JCB Supabase Backup", 9pm). First backup: products 104, logs 55,
+  history 689, expenses 7, cost_profiles 15.
