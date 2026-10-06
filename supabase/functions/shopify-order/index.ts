@@ -44,10 +44,14 @@ Deno.serve(async (req) => {
   const order = JSON.parse(raw);
   const label = "Shopify " + (order.name || "#" + order.order_number);
 
-  // Bogus-gateway test orders and already-cancelled orders shouldn't move real stock.
-  if (!dry && (order.test || order.cancelled_at)) {
-    console.log(label, "ignored:", order.test ? "test order" : "cancelled");
-    return json({ ok: true, ignored: order.test ? "test order" : "cancelled" });
+  // Admin "Send test notification" posts a sample order (#9999, fixed id) that can contain real
+  // products; Bogus-gateway test orders and cancelled orders shouldn't move real stock either.
+  const sample = order.order_number === 9999 || order.name === "#9999" || String(order.id) === "820982911946154508" ||
+    req.headers.get("x-shopify-test") === "true";
+  const ignore = sample ? "test notification" : order.test ? "test order" : order.cancelled_at ? "cancelled" : "";
+  if (ignore && !dry) {
+    console.log(label, "ignored:", ignore);
+    return json({ ok: true, ignored: ignore });
   }
 
   const products: Product[] = await db("products?select=id,name,color,series,sku,barcode,qty&order=name,color");
@@ -56,7 +60,8 @@ Deno.serve(async (req) => {
   if (plan.skipped.length) console.log(label, "skipped lines:", JSON.stringify(plan.skipped));
   if (dry) {
     const lines = plan.items.map((i) => i.components ? `${i.qty}x Variety Pack (${i.components.map((c) => c.color).join(", ")})` : `${i.qty}x ${i.name} ${i.color} @ $${i.price}`);
-    console.log(`DRY ${label} | ${person} | ${plan.channel} | ${lines.join("; ")} | ship $${plan.shipPaid}` + (plan.skipped.length ? ` | skipped: ${plan.skipped.map((s) => s.title).join(", ")}` : ""));
+    console.log(`DRY ${label} | ${person} | ${plan.channel} | ${lines.join("; ")} | ship $${plan.shipPaid}` + (plan.skipped.length ? ` | skipped: ${plan.skipped.map((s) => s.title).join(", ")}` : "") +
+      (ignore ? ` | LIVE WOULD IGNORE: ${ignore}` : ""));
     return json({ dry: true, label, person, ...plan });
   }
   if (!plan.items.length) return json({ ok: true, label, note: "no inventory items", skipped: plan.skipped });
