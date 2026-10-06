@@ -140,6 +140,8 @@ with the code. Update the sections above if architecture changed.
   removed Blue/Orange Walker variant from Shopify; set Shopify Variety Pack SKU `JCB-VAR7`. Built + deployed
   Edge Function `shopify-order` (webhook in dry-run `?dry=1` first). Added `logs.ship_paid` / `ship_cost`
   columns, manual Shipping section on order detail (+ shipping line on invoice), finance Dashboard
-  Shipping card. Open: switch webhook URL to live after checking dry-run logs on real orders; check
-  ORD-0059 / ORD-0060 (identical 444-bag orders 3.6s apart — likely double-submit, possibly double-deducted);
-  optional Shippo API for automatic label cost; refund/cancel webhook to restock.
+  Shipping card; Checkout tab has Shipping charged / Our ship cost fields. Function ignores Shopify's
+  "Send test notification" sample (#9999). **Webhook switched to live 2026-10-06** (no `?dry=1`).
+  ORD-0060 was a duplicate of ORD-0059 (double-submit); Thomas returned it 2026-09-24 to restock.
+  Open: verify the first live Shopify order; optional Shippo API for automatic label cost;
+  refund/cancel webhook to restock.
