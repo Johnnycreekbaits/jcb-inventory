@@ -1,3 +1,4 @@
 .env
 CLAUDE.local.md
 verify_*.png
+supabase/.temp/
