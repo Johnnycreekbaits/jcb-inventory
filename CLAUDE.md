@@ -28,6 +28,8 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - `logs` — checkout orders (id, name, pid, date, qty, price, ch, st, items, person, project, ret, paid)
   - `items` is JSON: new format `{state:"XX", items:[{pid,name,color,qty,price}]}`; old format is a plain array
   - `paid` = date string paid (null = unpaid) — drives AR in finance app
+  - `ship_paid` / `ship_cost` = shipping charged to customer / label cost to us (numeric, null = not entered).
+    Edited on the order detail modal; finance Dashboard has a Shipping card (not included in Net Profit).
 - `history` — audit log (JS var is `auditLog`, to avoid clashing with `window.history`)
 - `expenses` — monthly expenses (month, category, amount, description, created_by)
 - `cost_profiles` — COGS per product (id, name, series, unit, cogs); seeded on first load
@@ -40,6 +42,22 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - Needs `SUPABASE_URL` / `SUPABASE_KEY` in `.env`. Each folder has `_summary.json` with row counts.
 - Restore: use the `.json` files — POST rows back via `/rest/v1/<table>` or import the CSV in
   the Supabase Table Editor. Always back up current state before restoring.
+
+## Shopify → inventory (Edge Function `shopify-order`)
+- Code: `supabase/functions/shopify-order/` (`index.ts` HTTP + writes, `plan.ts` pure logic, `plan.test.ts`
+  local test: `node --env-file=.env supabase/functions/shopify-order/plan.test.ts`).
+- URL: `https://rgjnasxasmwzvywgkgdu.supabase.co/functions/v1/shopify-order` — Shopify webhook "Order creation".
+  `?dry=1` = plan only, no writes (logs a `DRY ...` line). Deployed with `--no-verify-jwt`; auth is the
+  Shopify HMAC (`SHOPIFY_WEBHOOK_SECRET`, set in Supabase Edge Function secrets + `.env` for testing).
+- Deploy: `npx supabase functions deploy shopify-order --project-ref rgjnasxasmwzvywgkgdu --no-verify-jwt --use-api`
+  (needs `SUPABASE_ACCESS_TOKEN` in `.env`, Edge Functions read/write only).
+- Matches Shopify variant SKU → `products.barcode` (Shopify SKUs are the real UPCs). "(WS)" listings = Dealer,
+  6 bags per soft-plastic unit (Walkers/Glides 1). Variety Pack SKU `JCB-VAR7` → 7 component bags picked like
+  the app. `PF-` (Printify apparel) and unknown SKUs are skipped and stored under `items.skipped`.
+- Writes like `confirmOrder()`: next `ORD-####`, project "Shopify #1234", history `changed_by` "Shopify".
+  `logs.id` = Shopify order id, so webhook retries hit a PK conflict and don't double-deduct.
+  Test and cancelled orders are ignored. Stock floors at 0 (oversell logged).
+- Barcode source of truth: Google Sheet "01 - 000 Baits w/ Barcodes". Shopify SKUs must match it.
 
 ## Channels & Pricing (index.html)
 `["DTC","Dealer","Distro","Pro Staff","Sponsorship/Promo","Internal"]`
@@ -116,3 +134,12 @@ with the code. Update the sections above if architecture changed.
 - **2026-09-24** — Added daily Supabase backup to Google Drive (`backup_supabase.py`,
   scheduled task "JCB Supabase Backup", 9pm). First backup: products 104, logs 55,
   history 689, expenses 7, cost_profiles 15.
+- **2026-10-02 → 10-06** — Shopify order → inventory automation. Audited barcodes (sheet vs app vs
+  Shopify): fixed 11 Shopify Green Pumpkin SKUs (Stick/Neko/Craw/Hawg/Finesse, retail + WS + DEMO Neko —
+  each had a neighbouring color's/product's UPC); swapped XG8 Custom (815505) / White Ghost (815550) in app;
+  removed Blue/Orange Walker variant from Shopify; set Shopify Variety Pack SKU `JCB-VAR7`. Built + deployed
+  Edge Function `shopify-order` (webhook in dry-run `?dry=1` first). Added `logs.ship_paid` / `ship_cost`
+  columns, manual Shipping section on order detail (+ shipping line on invoice), finance Dashboard
+  Shipping card. Open: switch webhook URL to live after checking dry-run logs on real orders; check
+  ORD-0059 / ORD-0060 (identical 444-bag orders 3.6s apart — likely double-submit, possibly double-deducted);
+  optional Shippo API for automatic label cost; refund/cancel webhook to restock.

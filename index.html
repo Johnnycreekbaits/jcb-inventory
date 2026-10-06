@@ -818,9 +818,12 @@ function printInvoice(id){
         +'<th style="padding:10px 6px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Unit Price</th>'
         +'<th style="padding:10px 6px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Total</th>'
       +'</tr></thead><tbody>'+rows+'</tbody>'
-      +'<tfoot><tr style="border-top:2px solid #e2e8f0;">'
+      +'<tfoot>'+(Number(log.ship_paid)>0?'<tr style="border-top:2px solid #e2e8f0;">'
+        +'<td colspan="3" style="padding:8px 6px;text-align:right;font-size:13px;color:#475569;">Shipping</td>'
+        +'<td style="padding:8px 6px;text-align:right;font-size:13px;">$'+Number(log.ship_paid).toFixed(2)+'</td></tr>':'')
+        +'<tr style="border-top:2px solid #e2e8f0;">'
         +'<td colspan="3" style="padding:12px 6px;font-weight:700;text-align:right;font-size:14px;">TOTAL</td>'
-        +'<td style="padding:12px 6px;font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;text-align:right;">$'+total.toFixed(2)+'</td>'
+        +'<td style="padding:12px 6px;font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;text-align:right;">$'+(total+Number(log.ship_paid||0)).toFixed(2)+'</td>'
       +'</tr></tfoot>'
     +'</table>'
     +'<div style="margin-top:40px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;">Thank you for your business &mdash; Johnny Creek Baits &mdash; thomas@johnnycreekbaits.com</div>'
@@ -836,7 +839,15 @@ function logDetailModal(id){
   var paidBadge=log.paid?'<span style="background:#dcfce7;color:#16a34a;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">PAID '+log.paid+'</span>':'';
   var unpaidBadge=(isPaidChannel&&!log.paid&&log.st==="Out")?'<span style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">UNPAID</span>':'';
   var itemsHTML=itemsData.length>0?itemsData.map(function(item){return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;"><div style="display:flex;align-items:center;gap:6px;">'+dotHtml(item.color||"")+'<div><div style="font-weight:600;font-size:13px;">'+item.name+(item.color?" &mdash; "+item.color:"")+'</div><div style="font-size:11px;color:#94a3b8;">$'+(item.price||0).toFixed(2)+' each</div></div></div><div style="font-family:\'Bebas Neue\',cursive;font-size:20px;color:#ea580c;">&times;'+item.qty+'</div></div>';}).join(""):'<div style="font-size:13px;color:#64748b;">No item detail (legacy order)</div>';
-  var actionBtns='<div style="display:flex;gap:8px;margin-top:14px;">'
+  var shipVal=function(v){return v===null||v===undefined?"":Number(v).toFixed(2);};
+  var shipNet=(log.ship_paid!=null||log.ship_cost!=null)?(Number(log.ship_paid||0)-Number(log.ship_cost||0)):null;
+  var shipHTML='<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin:16px 0 8px;">Shipping</div>'
+    +'<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">'
+    +'<div style="flex:1;min-width:110px;"><label class="field-label">Customer paid $</label><input class="field-input" id="shipPaid" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" value="'+shipVal(log.ship_paid)+'"/></div>'
+    +'<div style="flex:1;min-width:110px;"><label class="field-label">Our cost $</label><input class="field-input" id="shipCost" type="number" step="0.01" min="0" inputmode="decimal" placeholder="from Shippo" value="'+shipVal(log.ship_cost)+'"/></div>'
+    +'<button class="btn-outline" id="btnSaveShip" style="font-size:12px;padding:9px 14px;">Save</button></div>'
+    +(shipNet!==null?'<div style="font-size:12px;margin-top:6px;color:'+(shipNet<0?"#dc2626":"#16a34a")+';font-weight:600;">Shipping net: '+(shipNet<0?"-$":"$")+Math.abs(shipNet).toFixed(2)+'</div>':'');
+  var actionBtns=shipHTML+'<div style="display:flex;gap:8px;margin-top:14px;">'
     +'<button class="btn-outline" id="btnInvoice" style="flex:1;font-size:12px;padding:9px;">Print Invoice</button>'
     +(isPaidChannel&&!log.paid&&log.st==="Out"?'<button class="btn-green" id="btnMarkPaid" style="flex:1;font-size:12px;padding:9px;">Mark as Paid</button>':'')
     +'</div>';
@@ -844,6 +855,19 @@ function logDetailModal(id){
   document.getElementById("mLogClose").onclick=function(){document.getElementById("mLogDetail").remove();};
   document.getElementById("mLogDetail").onclick=function(e){if(e.target===this)this.remove();};
   document.getElementById("btnInvoice").onclick=function(){printInvoice(id);};
+  var sb=document.getElementById("btnSaveShip");
+  sb.onclick=function(){
+    if(sb.disabled)return;
+    var num=function(elId){var v=document.getElementById(elId).value.trim();return v===""?null:Math.round(parseFloat(v)*100)/100;};
+    var paid=num("shipPaid"),cost=num("shipCost");
+    if((paid!==null&&(isNaN(paid)||paid<0))||(cost!==null&&(isNaN(cost)||cost<0))){showToast("Enter a valid amount","err");return;}
+    sb.disabled=true;sb.textContent="Saving...";
+    dbPatch("logs","id=eq."+id,{ship_paid:paid,ship_cost:cost}).then(function(){
+      var l=logs.find(function(x){return x.id===id;});if(l){l.ship_paid=paid;l.ship_cost=cost;}
+      document.getElementById("mLogDetail").remove();
+      showToast("Shipping saved");logDetailModal(id);
+    }).catch(function(){sb.disabled=false;sb.textContent="Save";showToast("Error saving shipping","err");});
+  };
   var mp=document.getElementById("btnMarkPaid");
   if(mp)mp.onclick=function(){
     var today=new Date().toISOString().slice(0,10);
