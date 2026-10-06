@@ -59,6 +59,14 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   Test and cancelled orders are ignored. Stock floors at 0 (oversell logged).
 - Barcode source of truth: Google Sheet "01 - 000 Baits w/ Barcodes". Shopify SKUs must match it.
 
+## P&L PDF import (Edge Function `pnl-import`)
+- Finance app Expenses tab -> "Upload P&L PDF". The accountant's monthly report is a ScanSnap scan (no text layer),
+  so `supabase/functions/pnl-import/index.ts` sends it to Claude (`claude-opus-5-5`, structured output) and returns
+  the CURR MO Operating/Other expense lines + the printed totals. Nothing is written server-side: the app shows the
+  lines as the normal import preview (with a total-vs-report check) and saves via the existing Apply button.
+- Secret `ANTHROPIC_API_KEY` (Supabase Edge Function secrets + `.env`); Console spend limit $10/mo. JWT verification
+  on (called with the anon key). ~3-5 cents per PDF.
+
 ## Channels & Pricing (index.html)
 `["DTC","Dealer","Distro","Pro Staff","Sponsorship/Promo","Internal"]`
 - Sponsorship/Promo, Internal, Sample/Promo → $0 revenue
@@ -145,3 +153,7 @@ with the code. Update the sections above if architecture changed.
   ORD-0060 was a duplicate of ORD-0059 (double-submit); Thomas returned it 2026-09-24 to restock.
   Open: verify the first live Shopify order; optional Shippo API for automatic label cost;
   refund/cancel webhook to restock.
+- **2026-10-06** — P&L PDF import: Edge Function `pnl-import` + "Upload P&L PDF" on the finance Expenses tab;
+  added "Rent" expense category. Tested on May and Sept 2026 reports (sums $2,987 / $8,835 vs printed $2,988 /
+  $8,836 — whole-dollar rounding). Found May's saved "Shop Expense $497" came from the LAST YEAR column (May CURR MO
+  = 0) — flagged to Thomas to delete. June–Sept expenses not yet entered.

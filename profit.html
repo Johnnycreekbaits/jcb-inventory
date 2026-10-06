@@ -131,7 +131,7 @@ function saveCosts(){
   dbPost("cost_profiles",costProfiles).catch(function(e){console.warn("Cost profile sync:",e);});
 }
 function deleteCostFromDB(id){dbDelete("cost_profiles","id=eq."+id).catch(function(){});}
-var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","Employee Meals","Federal Excise Tax","Fuel Expense","Interest Expense","Legal and Accounting","Office Expense","Other Taxes, Fees & Licenses","Outside Services","Payroll","Penalties","Repairs and Maintenance","Shop Expense","Supplies and Small Tools","Training Expense","Travel Expense","Utilities Expense"];
+var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","Employee Meals","Federal Excise Tax","Fuel Expense","Interest Expense","Legal and Accounting","Office Expense","Other Taxes, Fees & Licenses","Outside Services","Payroll","Penalties","Rent","Repairs and Maintenance","Shop Expense","Supplies and Small Tools","Training Expense","Travel Expense","Utilities Expense"];
 var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function getChannelPrice(prod,channel){
@@ -207,7 +207,7 @@ async function hashPw(pw){
 var products=[],logs=[],expenses=[],expReady=true;
 var activeTab="dash",period="month";
 var expMonth=new Date().toISOString().slice(0,7);
-var impText="",impPrev=null,impMsg="";
+var impText="",impPrev=null,impMsg="",pdfBusy=false;
 
 function fmt$(n){return"$"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtPct(n){return n.toFixed(1)+"%";}
@@ -423,7 +423,8 @@ function expHTML(){
   if(impPrev&&impPrev.length>0){
     prevHTML='<div class="card" style="border:1px solid #bbf7d0;background:#f0fdf4;margin-bottom:10px;"><div style="font-weight:700;font-size:13px;color:#16a34a;margin-bottom:10px;">&#x2705; '+impPrev.length+' expenses ready to import</div>'+impPrev.slice(0,20).map(function(m){return'<div class="preview-row"><div><span class="exp-cat">'+m.category+'</span><span style="margin-left:8px;font-size:12px;font-weight:600;">'+m.description+'</span></div><span style="font-weight:700;color:#dc2626;">'+fmt$(m.amount)+'</span></div>';}).join("")+'</div><button class="btn-green" id="btnApplyExp" style="width:100%;padding:12px;font-size:14px;margin-bottom:14px;">&#x2705; Apply '+impPrev.length+' Expenses for '+expMonth+'</button>';
   }
-  return'<div class="section-title">EXPENSES</div><div class="section-sub">Monthly operating costs</div><div class="field-wrap"><label class="field-label">Select Month</label><input class="field-input" type="month" id="expMonthSel" value="'+expMonth+'"/></div>'+(monthExp.length>0?'<div class="card" style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-weight:700;font-size:13px;">'+MONTHS[parseInt(expMonth.split("-")[1])-1]+" "+expMonth.split("-")[0]+" Expenses</div><div style=\"font-family:'Bebas Neue',cursive;font-size:20px;color:#dc2626;\">"+fmt$(monthTotal)+'</div></div>'+expList+'</div>':"")+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px;">&#x1F4CB; Import Expenses</div><div class="hint-box">Paste from your spreadsheet (tab or comma separated):<br><strong>Category &nbsp;|&nbsp; Description &nbsp;|&nbsp; Amount</strong><br><br>Example:<br>Utilities &nbsp;|&nbsp; Electric bill &nbsp;|&nbsp; 145.00<br>Marketing &amp; Advertising &nbsp;|&nbsp; Instagram ads &nbsp;|&nbsp; 250.00</div><div class="field-wrap"><label class="field-label">Paste data here</label><textarea class="field-input" id="expTA" rows="8" style="resize:vertical;line-height:1.8;">'+(impText||"")+'</textarea></div><button class="btn-outline" id="btnPreviewExp" style="width:100%;margin-bottom:10px;padding:11px;">&#x1F50D; Preview Import</button>'+(impMsg?'<div style="font-size:11px;color:#64748b;margin-bottom:10px;">'+impMsg+'</div>':"")+'</div>'+prevHTML;
+  return'<div class="section-title">EXPENSES</div><div class="section-sub">Monthly operating costs</div><div class="field-wrap"><label class="field-label">Select Month</label><input class="field-input" type="month" id="expMonthSel" value="'+expMonth+'"/></div>'+(monthExp.length>0?'<div class="card" style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-weight:700;font-size:13px;">'+MONTHS[parseInt(expMonth.split("-")[1])-1]+" "+expMonth.split("-")[0]+" Expenses</div><div style=\"font-family:'Bebas Neue',cursive;font-size:20px;color:#dc2626;\">"+fmt$(monthTotal)+'</div></div>'+expList+'</div>':"")+'<div class="card" style="border:1px solid #bfdbfe;"><div style="font-weight:700;font-size:13px;margin-bottom:6px;">&#x1F4C4; Upload P&amp;L PDF</div><div style="font-size:12px;color:#64748b;margin-bottom:10px;">The accountant&#39;s monthly report (scan is fine). The month and expense lines are read automatically; you review them before saving.</div><input type="file" id="pnlFile" accept="application/pdf" style="display:none;"/><button class="btn-primary" id="btnPnlPdf" style="width:100%;padding:11px;"'+(pdfBusy?' disabled':'')+'>'+(pdfBusy?'Reading PDF&hellip; (up to a minute)':'&#x1F4E4; Choose PDF')+'</button></div>'
+    +'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px;">&#x1F4CB; Import Expenses</div><div class="hint-box">Paste from your spreadsheet (tab or comma separated):<br><strong>Category &nbsp;|&nbsp; Description &nbsp;|&nbsp; Amount</strong><br><br>Example:<br>Utilities &nbsp;|&nbsp; Electric bill &nbsp;|&nbsp; 145.00<br>Marketing &amp; Advertising &nbsp;|&nbsp; Instagram ads &nbsp;|&nbsp; 250.00</div><div class="field-wrap"><label class="field-label">Paste data here</label><textarea class="field-input" id="expTA" rows="8" style="resize:vertical;line-height:1.8;">'+(impText||"")+'</textarea></div><button class="btn-outline" id="btnPreviewExp" style="width:100%;margin-bottom:10px;padding:11px;">&#x1F50D; Preview Import</button>'+(impMsg?'<div style="font-size:11px;color:#64748b;margin-bottom:10px;">'+impMsg+'</div>':"")+'</div>'+prevHTML;
 }
 
 function costsHTML(){
@@ -609,6 +610,35 @@ function wire(){
     render();
     var ta2=document.getElementById("expTA");if(ta2)ta2.value=impText;
   };
+  var bpp=document.getElementById("btnPnlPdf"),pf=document.getElementById("pnlFile");
+  if(bpp&&pf){
+    bpp.onclick=function(){if(!pdfBusy)pf.click();};
+    pf.onchange=function(){
+      var file=pf.files&&pf.files[0];if(!file)return;
+      if(file.size>10*1024*1024){showToast("PDF is larger than 10 MB","err");return;}
+      pdfBusy=true;impPrev=null;impMsg="";render();
+      var rd=new FileReader();
+      rd.onload=function(){
+        fetch(SB_URL+"/functions/v1/pnl-import",{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"apikey":SB_KEY,"Content-Type":"application/json"},body:JSON.stringify({pdf:String(rd.result),categories:EXP_CATS})})
+        .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||("Error "+r.status));return j;});})
+        .then(function(j){
+          pdfBusy=false;
+          if(/^\d{4}-\d{2}$/.test(j.month))expMonth=j.month;
+          var label=MONTHS[parseInt(expMonth.split("-")[1])-1]+" "+expMonth.split("-")[0]+" P&L";
+          impPrev=j.lines.filter(function(l){return Number(l.amount)!==0;}).map(function(l){return{id:Date.now()+(Math.random()*99999|0),month:expMonth,category:l.category,description:label,amount:Math.round(Number(l.amount)*100)/100,created_by:"P&L PDF"};});
+          if(!impPrev.length)impPrev=null;
+          var existing=expenses.filter(function(e){return e.month===expMonth;}).length;
+          impMsg="Read "+(impPrev?impPrev.length:0)+" lines for "+label.replace(" P&L","")+" &middot; total "+fmt$(j.sum)+" vs report "+fmt$(j.printed_total)
+            +(j.matches?' <span style="color:#16a34a;font-weight:700;">&#x2713; matches</span>':' <span style="color:#dc2626;font-weight:700;">&#x26A0; does not match the report total &mdash; check the lines before applying</span>')
+            +(existing?'<br><span style="color:#dc2626;font-weight:700;">&#x26A0; '+existing+' expenses are already saved for this month &mdash; applying adds these on top.</span>':'');
+          render();
+        })
+        .catch(function(e){pdfBusy=false;impMsg='<span style="color:#dc2626;">'+e.message+'</span>';render();showToast("Could not read PDF","err");});
+      };
+      rd.onerror=function(){pdfBusy=false;render();showToast("Could not open file","err");};
+      rd.readAsDataURL(file);
+    };
+  }
   var bae=document.getElementById("btnApplyExp");
   if(bae)bae.onclick=function(){
     if(!impPrev||!impPrev.length)return;
