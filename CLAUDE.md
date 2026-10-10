@@ -12,7 +12,7 @@ All pages are single-file HTML/CSS/JS — no build step, no framework, no npm. K
 | File | Purpose | Live URL |
 |---|---|---|
 | `index.html` | Inventory app — tabs: Stock, Checkout, Returns, Labels, Reports, History, Import, Export | https://johnnycreekbaits.github.io/jcb-inventory/ |
-| `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Production, P&L, Expenses, Costs, Transfers, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
+| `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Sales by Product (id `prod`), P&L, Expenses, Costs, Transfers, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
 
 - **Repo:** https://github.com/Johnnycreekbaits/jcb-inventory
 - **Deploy:** push to `main` → GitHub Pages rebuilds (~2 min). `.github/workflows/deploy.yml`
@@ -211,3 +211,6 @@ with the code. Update the sections above if architecture changed.
   badge on partially returned orders. New `returns` table + `history.return_id` (SQL run by Thomas). Finance revenue/
   COGS net out partial returns. Nightly backup includes `returns`. Tested 18/18 against live Supabase with a sample
   order (TEST-ORD-1); all sample rows removed and stock restored.
+- **2026-10-10** — Finance "Production" tab renamed **Sales by Product** (it always showed units sold/distributed per
+  product type, never production). Now net of partial returns via shared `returnNetter(log)` (also used by
+  `calcOrder`), and each card shows "N made this period" from `production_batches` (same cost-profile keying).

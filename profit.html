@@ -186,11 +186,15 @@ function parseItems(raw){try{if(!raw)return[];var p=JSON.parse(raw);return Array
 // Partial returns (Returns tab) on orders still "Out": {logId:{pid:qtyReturned}}. Fully returned orders are excluded elsewhere.
 var partialReturns={};
 function setPartialReturns(rows){partialReturns={};rows.forEach(function(r){var m=partialReturns[r.log_id]||(partialReturns[r.log_id]={});(r.items||[]).forEach(function(i){m[i.pid]=(m[i.pid]||0)+i.qty;});});}
+// net(pid,qty) → qty minus whatever of that line has come back (each returned unit is used once)
+function returnNetter(log){
+  var back=log.st==="Out"&&partialReturns[log.id]?Object.assign({},partialReturns[log.id]):{};
+  return function(pid,qty){var r=Math.min(qty,back[pid]||0);if(r)back[pid]-=r;return qty-r;};
+}
 function calcOrder(log,prods){
   var items=parseItems(log.items);
   var rev=0,cogs=0;
-  var back=log.st==="Out"&&partialReturns[log.id]?Object.assign({},partialReturns[log.id]):{};
-  var net=function(pid,qty){var r=Math.min(qty,back[pid]||0);if(r)back[pid]-=r;return qty-r;};
+  var net=returnNetter(log);
   if(items.length>0){
     items.forEach(function(item){
       var p=prods.find(function(x){return x.id===item.pid;});
@@ -271,7 +275,7 @@ function boot(){
   ]).then(function(res){
     products=res[0];logs=res[1];expenses=res[2];setPartialReturns(res[3]);
     render();
-    loadTransfers().then(function(){if(activeTab==="tr")render();});
+    loadTransfers().then(function(){if(activeTab==="tr"||activeTab==="prod")render();});
     // Load cost profiles after initial render — non-blocking
     dbGet("cost_profiles","?order=name").catch(function(){return null;}).then(function(dbCosts){
       if(dbCosts===null)return;
@@ -315,7 +319,7 @@ function hdrHTML(){
   return'<div class="header no-print"><div class="header-inner"><div class="logo"><div class="logo-icon">&#x1F4B0;</div><div><div class="logo-name">JCB Finance</div><div class="logo-sub">Owner Portal</div></div></div><button class="btn-gray" id="btnLogout" style="font-size:11px;padding:6px 12px;">Sign Out</button></div></div>';
 }
 function tabsHTML(){
-  var tabs=[{id:"dash",i:"&#x1F4CA;",l:"Dashboard"},{id:"prod",i:"&#x1F4E6;",l:"Production"},{id:"pl",i:"&#x1F4C8;",l:"P&L"},{id:"exp",i:"&#x1F4CB;",l:"Expenses"},{id:"costs",i:"&#x1F527;",l:"Costs"},{id:"tr",i:"&#x1F69A;",l:"Transfers"},{id:"rep",i:"&#x1F4C4;",l:"Report"}];
+  var tabs=[{id:"dash",i:"&#x1F4CA;",l:"Dashboard"},{id:"prod",i:"&#x1F4E6;",l:"Sales by Product"},{id:"pl",i:"&#x1F4C8;",l:"P&L"},{id:"exp",i:"&#x1F4CB;",l:"Expenses"},{id:"costs",i:"&#x1F527;",l:"Costs"},{id:"tr",i:"&#x1F69A;",l:"Transfers"},{id:"rep",i:"&#x1F4C4;",l:"Report"}];
   return'<div class="tabs no-print"><div class="tabs-inner">'+tabs.map(function(t){return'<button class="tab'+(activeTab===t.id?" active":"")+'" data-tab="'+t.id+'">'+t.i+" "+t.l+"</button>";}).join("")+"</div></div>";
 }
 function periodBarHTML(){
@@ -365,8 +369,10 @@ function prodHTML(){
   fl.forEach(function(l){
     var items=parseItems(l.items);
     var ch=l.ch||"Other";
+    var net=returnNetter(l);
     if(items.length>0){
-      items.forEach(function(item){
+      items.forEach(function(raw){
+        var item={pid:raw.pid,price:raw.price,qty:net(raw.pid,raw.qty)};if(!item.qty)return;
         var p=products.find(function(x){return x.id===item.pid;});
         var cp=matchCostProfile(p||null);
         var key=cp?cp.id:(p?p.name:"unknown");
@@ -381,15 +387,25 @@ function prodHTML(){
       var p=products.find(function(x){return x.id===l.pid;});
       var cp=matchCostProfile(p||null);
       var key=cp?cp.id:(p?p.name:"unknown");
+      var lq=net(l.pid,l.qty);if(!lq)return;
       if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:"Unknown"),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
-      byType[key].qty+=l.qty;
-      byType[key].cogs+=getItemCOGS(l.qty,p||null);
-      byType[key].rev+=l.qty*getChannelPrice(p||{price:l.price||0,pack:8},ch); // legacy no-items orders
+      byType[key].qty+=lq;
+      byType[key].cogs+=getItemCOGS(lq,p||null);
+      byType[key].rev+=lq*getChannelPrice(p||{price:l.price||0,pack:8},ch); // legacy no-items orders
       if(!byType[key].channels[ch])byType[key].channels[ch]=0;
-      byType[key].channels[ch]+=l.qty;
+      byType[key].channels[ch]+=lq;
     }
   });
-  if(fl.length===0)return periodBarHTML()+'<div class="section-title">PRODUCTION</div><div class="section-sub">'+periodLabel()+'</div><div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F4E6;</div><div style="font-weight:600;">No production in this period</div></div>';
+  var pr=getPeriodRange(),ps=localDateStr(pr.start),pe=localDateStr(pr.end),madeTotal=0;
+  if(trReady)batches.forEach(function(b){
+    if(b.batch_date<ps||b.batch_date>pe)return;
+    var p=products.find(function(x){return x.id===b.product_id;});
+    var cp=matchCostProfile(p||null);
+    var key=cp?cp.id:(p?p.name:b.product_name);
+    if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:b.product_name),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
+    byType[key].made=(byType[key].made||0)+b.qty;madeTotal+=b.qty;
+  });
+  if(Object.keys(byType).length===0)return periodBarHTML()+'<div class="section-title">SALES BY PRODUCT</div><div class="section-sub">'+periodLabel()+'</div><div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F4E6;</div><div style="font-weight:600;">No sales or batches in this period</div></div>';
   var entries=Object.values(byType).sort(function(a,b){return b.qty-a.qty;});
   var totalQty=entries.reduce(function(s,t){return s+t.qty;},0);
   var totalCogs=entries.reduce(function(s,t){return s+t.cogs;},0);
@@ -398,9 +414,10 @@ function prodHTML(){
     var chTags=Object.entries(t.channels).map(function(c){return'<span class="exp-cat" style="margin-right:4px;margin-bottom:4px;display:inline-block;">'+c[0]+': '+c[1]+'</span>';}).join("");
     var gross=t.rev-t.cogs;
     var margin=t.rev>0?(gross/t.rev*100):0;
-    return'<div class="card" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-weight:700;font-size:14px;">'+t.name+'</div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;">'+t.qty+' '+t.unit+'s</div></div><div style="margin-bottom:10px;">'+chTags+'</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"><div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">COGS</div><div style="font-weight:700;color:#dc2626;font-size:13px;">'+fmt$(t.cogs)+'</div></div><div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Revenue</div><div style="font-weight:700;color:#16a34a;font-size:13px;">'+fmt$(t.rev)+'</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Margin</div><div style="font-weight:700;font-size:13px;">'+fmtPct(margin)+'</div></div></div></div>';
+    var madeLine=trReady?'<div style="font-size:11px;color:#7c3aed;font-weight:600;margin-top:2px;">&#x1F9EA; '+(t.made||0)+' made this period &middot; '+t.qty+' sold/distributed</div>':'';
+    return'<div class="card" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div><div style="font-weight:700;font-size:14px;">'+t.name+'</div>'+madeLine+'</div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;">'+t.qty+' '+t.unit+'s</div></div><div style="margin-bottom:10px;">'+chTags+'</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"><div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">COGS</div><div style="font-weight:700;color:#dc2626;font-size:13px;">'+fmt$(t.cogs)+'</div></div><div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Revenue</div><div style="font-weight:700;color:#16a34a;font-size:13px;">'+fmt$(t.rev)+'</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Margin</div><div style="font-weight:700;font-size:13px;">'+fmtPct(margin)+'</div></div></div></div>';
   }).join("");
-  return periodBarHTML()+'<div class="section-title">PRODUCTION</div><div class="section-sub">'+periodLabel()+' &middot; '+totalQty+' units sold &amp; distributed</div>'+rowsHTML+'<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;"><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total COGS</span><span style="color:#dc2626;">'+fmt$(totalCogs)+'</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total Revenue</span><span style="color:#16a34a;">'+fmt$(totalRev)+'</span></div><div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:4px;"><span style="font-weight:700;">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#2563eb;">'+fmt$(totalRev-totalCogs)+'</span></div></div>';
+  return periodBarHTML()+'<div class="section-title">SALES BY PRODUCT</div><div class="section-sub">'+periodLabel()+' &middot; '+totalQty+' units sold &amp; distributed (net of returns)'+(trReady?' &middot; '+madeTotal+' made (batches)':'')+'</div>'+rowsHTML+'<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;"><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total COGS</span><span style="color:#dc2626;">'+fmt$(totalCogs)+'</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total Revenue</span><span style="color:#16a34a;">'+fmt$(totalRev)+'</span></div><div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:4px;"><span style="font-weight:700;">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#2563eb;">'+fmt$(totalRev-totalCogs)+'</span></div></div>';
 }
 
 function plHTML(){
