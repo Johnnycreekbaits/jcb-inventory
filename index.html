@@ -305,7 +305,6 @@ var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","D
 var TODAY=new Date().toISOString().slice(0,10);
 
 var products=[],logs=[],auditLog=[],labelDefs=[],adjInFlight=new Set();
-var retInFlight=new Set();
 var batches=[],batchRecv={},batchesReady=false,batchInFlight=false;
 var activeTab="inv",search="",activeSeries="All",activeStockFilter=null,logFilter="All",histFilter="All",activeLabelProduct=null;
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
@@ -354,7 +353,7 @@ function boot(){
     return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());
   }).then(function(h){
     auditLog=h;
-    return loadBatches();
+    return Promise.all([loadBatches(),loadReturns()]);
   }).then(function(){
     return dbGet("labels","?order=product,color").catch(function(){return [];});
   }).then(function(lb){
@@ -380,7 +379,7 @@ function isTypingInApp(){
   return !!(appEl&&appEl.contains(el));
 }
 function doRefresh(){
-  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;return loadBatches();}).then(function(){return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();if(!isTypingInApp())render();}).catch(function(){});
+  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;return Promise.all([loadBatches(),loadReturns()]);}).then(function(){return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();if(!isTypingInApp())render();}).catch(function(){});
 }
 setInterval(doRefresh,10000);
 
@@ -527,6 +526,7 @@ function render(){
   var html="";
   if(activeTab==="inv")html=invHTML();
   else if(activeTab==="co")html=coHTML();
+  else if(activeTab==="ret")html=retHTML();
   else if(activeTab==="lbl")html=lblHTML();
   else if(activeTab==="rep")html=repHTML();
   else if(activeTab==="hist")html=histHTML();
@@ -543,7 +543,7 @@ function hdrHTML(){
 }
 
 function tabsHTML(){
-  var tabs=[{id:"inv",i:"&#x1F4E6;",l:"Stock"},{id:"co",i:"&#x1F3A3;",l:"Checkout"},{id:"lbl",i:"&#x1F3F7;&#xFE0F;",l:"Labels"},{id:"rep",i:"&#x1F4CA;",l:"Reports"},{id:"hist",i:"&#x1F4CB;",l:"History"},{id:"imp",i:"&#x2601;&#xFE0F;",l:"Import"},{id:"exp",i:"&#x1F4E4;",l:"Export"}];
+  var tabs=[{id:"inv",i:"&#x1F4E6;",l:"Stock"},{id:"co",i:"&#x1F3A3;",l:"Checkout"},{id:"ret",i:"&#x21A9;&#xFE0F;",l:"Returns"},{id:"lbl",i:"&#x1F3F7;&#xFE0F;",l:"Labels"},{id:"rep",i:"&#x1F4CA;",l:"Reports"},{id:"hist",i:"&#x1F4CB;",l:"History"},{id:"imp",i:"&#x2601;&#xFE0F;",l:"Import"},{id:"exp",i:"&#x1F4E4;",l:"Export"}];
   return'<div class="tabs"><div class="tabs-inner">'+tabs.map(function(t){return'<button class="tab'+(activeTab===t.id?" active":"")+'" data-tab="'+t.id+'">'+t.i+" "+t.l+"</button>";}).join("")+"</div></div>";
 }
 
@@ -635,7 +635,7 @@ function coHTML(){
       itemsData.map(function(item){return'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;"><div style="display:flex;align-items:center;gap:5px;">'+dotHtml(item.color||"")+'<span>'+item.name+(item.color?" &mdash; "+item.color:"")+'</span></div><div style="font-weight:700;color:#ea580c;">&times;'+item.qty+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">$'+(item.qty*(item.price||0)).toFixed(2)+'</span></div></div>';}).join("")+
       '</div>';
     }
-    return'<div class="log-card '+(l.st==="Out"?"out":"returned")+'" data-logid="'+l.id+'" style="cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:14px;">'+l.name+'</span>'+'<span style="background:'+(l.st==="Out"?"#eff6ff":"#dcfce7")+';color:'+(l.st==="Out"?"#2563eb":"#16a34a")+';padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">'+(l.st==="Out"?"OUT":"BACK")+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">'+(l.ch?'<span style="margin-right:10px;">&#x1F3EA; '+l.ch+"</span>":"")+(l.person?'<span style="margin-right:10px;">&#x1F464; '+l.person+"</span>":"")+(l.project?'<span style="margin-right:10px;">&#x1F4CB; '+l.project+"</span>":"")+(ordState?'<span>&#x1F4CD; '+ordState+"</span>":"")+'</div></div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;margin-left:8px;">&times;'+l.qty+'</div></div><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-size:10px;color:#94a3b8;">'+l.date+(l.ret?'<span style="color:#16a34a;"> &rarr; back '+l.ret+"</span>":'<span style="color:'+(days>7?"#dc2626":"#94a3b8")+'"> &middot; '+days+"d out"+(days>7?" &#x26A0;&#xFE0F;":"")+"</span>")+(l.price>0?" &middot; $"+(l.qty*l.price).toFixed(2):"")+"</div>"+'<div style="display:flex;gap:6px;">'+(l.st==="Out"?'<button class="return-btn" data-ret="'+l.id+'">&#x21A9; Return</button>':'')+'<button style="background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;" data-editorder="'+l.id+'">&#x270F;&#xFE0F; Edit</button></div>'+"</div>"+itemsHTML+"</div>";
+    return'<div class="log-card '+(l.st==="Out"?"out":"returned")+'" data-logid="'+l.id+'" style="cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:14px;">'+l.name+'</span>'+'<span style="background:'+(l.st==="Out"?"#eff6ff":"#dcfce7")+';color:'+(l.st==="Out"?"#2563eb":"#16a34a")+';padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">'+(l.st==="Out"?"OUT":"BACK")+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">'+(l.ch?'<span style="margin-right:10px;">&#x1F3EA; '+l.ch+"</span>":"")+(l.person?'<span style="margin-right:10px;">&#x1F464; '+l.person+"</span>":"")+(l.project?'<span style="margin-right:10px;">&#x1F4CB; '+l.project+"</span>":"")+(ordState?'<span>&#x1F4CD; '+ordState+"</span>":"")+'</div></div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;margin-left:8px;">&times;'+l.qty+'</div></div><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-size:10px;color:#94a3b8;">'+l.date+(l.ret?'<span style="color:#16a34a;"> &rarr; back '+l.ret+"</span>":'<span style="color:'+(days>7?"#dc2626":"#94a3b8")+'"> &middot; '+days+"d out"+(days>7?" &#x26A0;&#xFE0F;":"")+"</span>")+(l.price>0?" &middot; $"+(l.qty*l.price).toFixed(2):"")+"</div>"+'<div style="display:flex;gap:6px;">'+(l.st==="Out"?(function(){var rd=returnedForLog(l.id),n=Object.keys(rd).reduce(function(s,k){return s+rd[k];},0);return n?'<span class="hist-badge" style="background:#dcfce7;color:#16a34a;align-self:center;">'+n+' returned</span>':'';})()+'<button class="return-btn" data-ret="'+l.id+'">&#x21A9; Return</button>':'')+'<button style="background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;" data-editorder="'+l.id+'">&#x270F;&#xFE0F; Edit</button></div>'+"</div>"+itemsHTML+"</div>";
   }).join("");
   return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><div><div class="section-title">CHECKOUT</div><div class="section-sub">'+logs.filter(function(l){return l.st==="Out";}).length+' units currently out</div></div><button class="btn-primary" id="btnCO2">&#x1F3A3; New Order</button></div>'+cartSection+'<div class="filter-bar">'+["All","Out","Returned","Paid","Unpaid"].map(function(f){return'<button class="filter-btn'+(logFilter===f?" active":"")+'" data-logf="'+f+'">'+f+"</button>";}).join("")+"</div>"+logCards;
 }
@@ -884,6 +884,145 @@ function receiveProductionModal(){
       doRefresh();
     }).catch(function(){showToast("Error saving","err");btn.disabled=false;btn.textContent="Add to Inventory";});
   };
+}
+
+// ── Returns tab: everything that comes back, with who / why / which order ──
+var RET_REASONS=["Customer return","Unused — back from event/show","Unused sponsorship/promo","Wrong item / order mistake","Taken out without an order","Damaged / defective","Other"];
+var NO_RESTOCK_REASONS=["Damaged / defective"];
+var returnsList=[],returnsReady=false,retSaveInFlight=false;
+var retMode="order",retOrderId=null,retQtys={},retPid=null,retQty="",retReason="",retNote="",retDate="",retRestock=true,retLogFilter="all";
+
+function loadReturns(){
+  return dbGet("returns","?order=return_date.desc,created_at.desc").then(function(r){returnsList=r;returnsReady=true;}).catch(function(){returnsReady=false;});
+}
+// Lines of an order in return terms: [{pid,name,color,qty,price,components?}] (legacy orders → one line)
+function orderLines(log){
+  var its=parseOrderItems(log.items).items;
+  if(its.length)return its.map(function(i){return{pid:i.pid,name:i.name,color:i.color||"",qty:i.qty,price:i.price||0,components:i.components||null};});
+  var p=products.find(function(x){return x.id===log.pid;});
+  return[{pid:log.pid,name:log.name&&p?p.name:(p?p.name:log.name),color:p?p.color||"":log.color||"",qty:log.qty,price:log.price||0,components:null}];
+}
+function returnedForLog(logId){
+  var m={};
+  returnsList.forEach(function(r){if(r.log_id!==logId)return;(r.items||[]).forEach(function(i){m[i.pid]=(m[i.pid]||0)+i.qty;});});
+  return m;
+}
+function retResetForm(){retOrderId=null;retQtys={};retPid=null;retQty="";retReason="";retNote="";retDate=localToday();retRestock=true;}
+function openReturnForOrder(id){retResetForm();retMode="order";retOrderId=id;activeTab="ret";render();window.scrollTo(0,0);}
+
+function retHTML(){
+  if(!retDate)retDate=localToday();
+  var head='<div class="section-title">RETURNS</div><div class="section-sub">Everything that comes back &mdash; which order, why, who, and whether it went back on the shelf</div>';
+  if(!returnsReady)return head+'<div class="card" style="border:1px solid #fde68a;"><div style="font-weight:700;color:#92400e;margin-bottom:6px;">&#x2699;&#xFE0F; One-time setup required</div><div style="font-size:12px;color:#64748b;">Run <code>supabase/sql/2026-10-10_returns.sql</code> in the Supabase SQL editor, then refresh.</div></div>';
+  var ym=localToday().slice(0,7);
+  var monthRets=returnsList.filter(function(r){return String(r.return_date).slice(0,7)===ym;});
+  var monthBags=monthRets.reduce(function(s,r){return s+(r.items||[]).reduce(function(a,i){return a+i.qty;},0);},0);
+  var kpis='<div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);"><div class="kpi" style="background:#f0fdf4;border:2px solid #86efac;"><div class="kpi-val" style="color:#16a34a;">'+monthRets.length+'</div><div class="kpi-lbl">Returns this month</div></div><div class="kpi" style="background:#eff6ff;border:2px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+monthBags+'</div><div class="kpi-lbl">Units returned this month</div></div></div>';
+  var modeBtns='<div class="filter-bar" style="margin-bottom:12px;"><button class="filter-btn'+(retMode==="order"?" active":"")+'" data-retmode="order">From an order</button><button class="filter-btn'+(retMode==="none"?" active":"")+'" data-retmode="none">No order</button></div>';
+  var body="";
+  if(retMode==="order"){
+    var outOrders=logs.filter(function(l){return l.st==="Out";});
+    body+='<div class="field-wrap"><label class="field-label">Order</label><select class="field-input" id="retOrder"><option value="">&mdash; Pick an order that is out &mdash;</option>'+outOrders.map(function(l){return'<option value="'+l.id+'"'+(retOrderId===l.id?" selected":"")+'>'+escHtml((l.name||"")+" · "+(l.person||"?")+" · "+(l.ch||"")+" · "+l.date+(l.project?" · "+l.project:""))+'</option>';}).join("")+'</select></div>';
+    var log=retOrderId?logs.find(function(l){return l.id===retOrderId;}):null;
+    if(log){
+      var done=returnedForLog(log.id),lines=orderLines(log);
+      body+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div class="field-label" style="margin:0;">Units coming back</div><button class="btn-outline" id="retAll" style="padding:5px 10px;font-size:11px;">Return all remaining</button></div>'
+        +lines.map(function(i){var left=Math.max(0,i.qty-(done[i.pid]||0));return'<div class="hist-card" style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">'+escHtml(i.name+(i.color?" — "+i.color:""))+(i.components?' <span style="font-size:10px;color:#94a3b8;">(restocks its '+i.components.length+' bags)</span>':'')+'</div><div style="font-size:10px;color:#94a3b8;">out '+i.qty+(done[i.pid]?' &middot; already returned '+done[i.pid]:'')+' &middot; '+left+' can come back</div></div><input class="field-input" type="number" min="0" max="'+left+'" data-retq="'+i.pid+'" value="'+(retQtys[i.pid]||"")+'" placeholder="0"'+(left===0?" disabled":"")+' style="width:76px;text-align:center;"/></div>';}).join("");
+    }
+  }else{
+    var opts=products.filter(function(p){return p.series!=="Bundles";}).map(function(p){return'<option value="'+p.id+'"'+(retPid===p.id?" selected":"")+'>'+escHtml(p.name+(p.color?" — "+p.color:""))+'</option>';}).join("");
+    body+='<div class="field-wrap"><label class="field-label">Product</label><select class="field-input" id="retProd"><option value="">&mdash; Pick a product &mdash;</option>'+opts+'</select></div><div class="field-wrap"><label class="field-label">Units coming back</label><input class="field-input" type="number" min="1" id="retQty" value="'+escHtml(retQty)+'" placeholder="e.g. 5"/></div>';
+  }
+  body+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Reason</label><select class="field-input" id="retReason"><option value="">&mdash; Why? &mdash;</option>'+RET_REASONS.map(function(r){return'<option'+(retReason===r?" selected":"")+'>'+escHtml(r)+'</option>';}).join("")+'</select></div><div class="field-wrap"><label class="field-label">Date</label><input class="field-input" type="date" id="retDate" value="'+retDate+'"/></div></div>'
+    +'<div class="field-wrap"><label class="field-label">Note (optional)</label><input class="field-input" id="retNote" value="'+escHtml(retNote)+'" placeholder="e.g. Lake Mead tournament leftovers"/></div>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px;cursor:pointer;"><input type="checkbox" id="retRestock"'+(retRestock?" checked":"")+' style="width:18px;height:18px;"/> Put back in stock <span style="font-size:10px;color:#94a3b8;">(uncheck for damaged &mdash; recorded, not restocked)</span></label>'
+    +'<button class="btn-primary" id="btnRetSave" style="width:100%;padding:13px;font-size:14px;">Record Return</button>';
+  var form='<div class="card">'+modeBtns+body+'</div>';
+  // Return log: recorded returns + full returns from before this tab existed
+  var tracked={};returnsList.forEach(function(r){if(r.log_id)tracked[r.log_id]=1;});
+  var legacy=logs.filter(function(l){return l.st==="Returned"&&!tracked[l.id];}).map(function(l){return{legacy:true,return_date:l.ret||l.date,order_name:l.name,person:l.person,channel:l.ch,items:orderLines(l),reason:"Full return (before Returns tab)",note:"",restocked:true,returned_by:""};});
+  var all=returnsList.concat(legacy).sort(function(a,b){return String(b.return_date).localeCompare(String(a.return_date));});
+  if(retLogFilter==="month")all=all.filter(function(r){return String(r.return_date).slice(0,7)===ym;});
+  var cards=all.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:30px;">No returns yet</div>':all.map(function(r){
+    var units=(r.items||[]).reduce(function(s,i){return s+i.qty;},0);
+    return'<div class="log-card returned"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:14px;">'+escHtml(r.order_name||"No order")+' <span class="hist-badge" style="background:'+(r.restocked?"#dcfce7;color:#16a34a":"#fef2f2;color:#dc2626")+';">'+(r.restocked?"restocked":"not restocked")+'</span>'+(r.legacy?' <span class="hist-badge" style="background:#f1f5f9;color:#64748b;">legacy</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:3px;">'+(r.person?'&#x1F464; '+escHtml(r.person)+' &middot; ':'')+(r.channel?escHtml(r.channel)+' &middot; ':'')+'<strong>'+escHtml(r.reason)+'</strong>'+(r.note?' &middot; '+escHtml(r.note):'')+'</div>'
+      +'<div style="font-size:11px;color:#475569;margin-top:4px;">'+(r.items||[]).map(function(i){return i.qty+'&times; '+escHtml(i.name+(i.color?" "+i.color:""));}).join(" &middot; ")+'</div>'
+      +'<div style="font-size:10px;color:#94a3b8;margin-top:3px;">'+escHtml(r.return_date)+(r.returned_by?' &middot; recorded by '+escHtml(r.returned_by):'')+'</div></div>'
+      +'<div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#16a34a;">+'+units+'</div></div></div>';
+  }).join("");
+  var logHead='<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px;"><div class="section-title" style="font-size:20px;">RETURN LOG</div><div style="display:flex;gap:6px;"><button class="filter-btn'+(retLogFilter==="all"?" active":"")+'" data-retlf="all">All</button><button class="filter-btn'+(retLogFilter==="month"?" active":"")+'" data-retlf="month">This month</button><button class="btn-outline" id="btnRetCSV" style="padding:5px 10px;font-size:11px;">CSV</button></div></div>';
+  return head+kpis+form+logHead+cards;
+}
+
+function wireReturns(){
+  document.querySelectorAll("[data-retmode]").forEach(function(b){b.onclick=function(){retMode=b.dataset.retmode;retQtys={};render();};});
+  document.querySelectorAll("[data-retlf]").forEach(function(b){b.onclick=function(){retLogFilter=b.dataset.retlf;render();};});
+  var o=document.getElementById("retOrder");if(o)o.onchange=function(){retOrderId=o.value?parseInt(o.value):null;retQtys={};render();};
+  document.querySelectorAll("[data-retq]").forEach(function(inp){inp.oninput=function(){var v=parseInt(inp.value)||0,mx=parseInt(inp.max)||0;if(v>mx){v=mx;inp.value=mx;}retQtys[inp.dataset.retq]=v;};});
+  var all=document.getElementById("retAll");if(all)all.onclick=function(){
+    var log=logs.find(function(l){return l.id===retOrderId;});if(!log)return;var done=returnedForLog(log.id);
+    orderLines(log).forEach(function(i){retQtys[i.pid]=Math.max(0,i.qty-(done[i.pid]||0));});render();
+  };
+  var rp=document.getElementById("retProd");if(rp)rp.onchange=function(){retPid=rp.value?parseInt(rp.value):null;};
+  var rq=document.getElementById("retQty");if(rq)rq.oninput=function(){retQty=rq.value;};
+  var rr=document.getElementById("retReason");if(rr)rr.onchange=function(){retReason=rr.value;retRestock=NO_RESTOCK_REASONS.indexOf(retReason)<0;var c=document.getElementById("retRestock");if(c)c.checked=retRestock;};
+  var rd=document.getElementById("retDate");if(rd)rd.onchange=function(){retDate=rd.value;};
+  var rn=document.getElementById("retNote");if(rn)rn.oninput=function(){retNote=rn.value;};
+  var rs=document.getElementById("retRestock");if(rs)rs.onchange=function(){retRestock=rs.checked;};
+  var csv=document.getElementById("btnRetCSV");if(csv)csv.onclick=function(){
+    exportCSV(returnsList.map(function(r){return{date:r.return_date,order:r.order_name||"No order",person:r.person,channel:r.channel,items:(r.items||[]).map(function(i){return i.qty+"x "+i.name+(i.color?" "+i.color:"");}).join("; "),units:(r.items||[]).reduce(function(s,i){return s+i.qty;},0),reason:r.reason,note:r.note,restocked:r.restocked?"yes":"no",recorded_by:r.returned_by};}),"jcb-returns-"+localToday()+".csv",["date","order","person","channel","items","units","reason","note","restocked","recorded_by"]);
+  };
+  var sv=document.getElementById("btnRetSave");if(sv)sv.onclick=function(){saveReturn(sv);};
+}
+
+function saveReturn(btn){
+  if(retSaveInFlight)return;
+  if(!retReason){showToast("Pick a reason","err");return;}
+  if(!retDate){showToast("Pick a date","err");return;}
+  var log=null,lines=[];
+  if(retMode==="order"){
+    log=logs.find(function(l){return l.id===retOrderId;});
+    if(!log){showToast("Pick an order","err");return;}
+    if(log.st!=="Out"){showToast("That order is already fully returned","err");return;}
+    var done=returnedForLog(log.id);
+    orderLines(log).forEach(function(i){var q=parseInt(retQtys[i.pid])||0;var left=i.qty-(done[i.pid]||0);if(q>0)lines.push(Object.assign({},i,{qty:Math.min(q,left)}));});
+  }else{
+    var p=products.find(function(x){return x.id===retPid;});var q=parseInt(retQty)||0;
+    if(!p){showToast("Pick a product","err");return;}
+    lines=[{pid:p.id,name:p.name,color:p.color||"",qty:q,price:0,components:null}];
+  }
+  lines=lines.filter(function(l){return l.qty>0;});
+  if(!lines.length){showToast("Enter how many units came back","err");return;}
+  var units=lines.reduce(function(s,l){return s+l.qty;},0);
+  if(!confirm("Record return of "+units+" unit"+(units===1?"":"s")+(log?" from "+log.name:"")+" — "+retReason+(retRestock?" — and put back in stock?":" — NOT restocked?")))return;
+  retSaveInFlight=true;btn.disabled=true;btn.textContent="Saving...";
+  var id=Date.now()+(Math.random()*1000|0);
+  var row={id:id,return_date:retDate,log_id:log?log.id:null,order_name:log?log.name||"":"",person:log?log.person||"":"",channel:log?log.ch||"":"",
+    items:lines.map(function(l){var o={pid:l.pid,name:l.name,color:l.color,qty:l.qty,price:l.price||0};if(l.components)o.components=l.components;return o;}),
+    reason:retReason,note:retNote.trim(),restocked:!!retRestock,returned_by:currentUser};
+  var label="Return"+(log?" "+log.name:" (no order)")+" — "+retReason+(retNote.trim()?" — "+retNote.trim():"");
+  dbPost("returns",row).then(function(){
+    // Stock moves (Variety Packs restock their component bags, never the bundle)
+    var moves=[];
+    lines.forEach(function(l){if(l.components)l.components.forEach(function(c){moves.push({pid:c.pid,qty:c.qty*l.qty});});else moves.push({pid:l.pid,qty:l.qty});});
+    var chain=Promise.resolve();
+    moves.forEach(function(m){chain=chain.then(function(){
+      var p=products.find(function(x){return x.id===m.pid;});if(!p)return;
+      var before=p.qty,nq=retRestock?before+m.qty:before;
+      var write=retRestock?dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){p.qty=nq;}):Promise.resolve();
+      return write.then(function(){return logHistory(p,before,nq,"return",currentUser,label+(retRestock?"":" — "+m.qty+" not restocked"),{return_id:id});});
+    });});
+    return chain;
+  }).then(function(){
+    if(!log)return;
+    var done=returnedForLog(log.id);lines.forEach(function(l){done[l.pid]=(done[l.pid]||0)+l.qty;});
+    var full=orderLines(log).every(function(i){return(done[i.pid]||0)>=i.qty;});
+    if(full)return dbPatch("logs","id=eq."+log.id,{st:"Returned",ret:retDate});
+  }).then(function(){
+    showToast("Return recorded");retResetForm();return loadReturns().then(doRefresh);
+  }).catch(function(e){showToast("Error: "+e.message,"err");btn.disabled=false;btn.textContent="Record Return";})
+    .then(function(){retSaveInFlight=false;});
 }
 
 function printInvoice(id){
@@ -1159,36 +1298,8 @@ function wire(){
   document.querySelectorAll("[data-histf]").forEach(function(b){b.onclick=function(){histFilter=b.dataset.histf;render();};});
   document.querySelectorAll(".log-card[data-logid]").forEach(function(card){card.onclick=function(e){if(e.target.closest("[data-ret]")||e.target.closest("[data-editorder]"))return;logDetailModal(parseInt(card.dataset.logid));};});
   document.querySelectorAll("[data-editorder]").forEach(function(b){b.onclick=function(e){e.stopPropagation();editOrderModal(parseInt(b.dataset.editorder));};});
-  document.querySelectorAll("[data-ret]").forEach(function(b){b.onclick=function(e){e.stopPropagation();
-    var id=parseInt(b.dataset.ret);var log=logs.find(function(l){return l.id===id;});if(!log)return;
-    if(retInFlight.has(id)||log.st!=="Out")return;
-    if(!confirm("Return "+(log.name||"this order")+" and put its stock back?"))return;
-    retInFlight.add(id);b.disabled=true;b.textContent="Returning...";
-    dbPatch("logs","id=eq."+id,{ret:TODAY,st:"Returned"}).then(function(){
-      var parsed=parseOrderItems(log.items);var items=parsed.items;
-      if(items.length>0){
-        var chain=Promise.resolve();
-        // Variety Packs restock their component bags, not the bundle itself
-        var restock=[];
-        items.forEach(function(item){
-          if(item.components)item.components.forEach(function(c){restock.push({pid:c.pid,name:c.name,color:c.color,qty:c.qty*item.qty});});
-          else restock.push(item);
-        });
-        restock.forEach(function(item){
-          chain=chain.then(function(){
-            var p=products.find(function(x){return x.id===item.pid;});
-            if(!p)return;
-            var before=p.qty;var nq=before+item.qty;p.qty=nq;
-            return dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){return logHistory(p,before,nq,"return",currentUser,"Return: "+(log.name||"order")+" — "+(item.name||"item")+(item.color?" "+item.color:""));});
-          });
-        });
-        return chain;
-      }else{
-        var p=products.find(function(x){return x.id===log.pid;});
-        if(p){var before=p.qty;var nq=before+log.qty;p.qty=nq;return dbPatch("products","id=eq."+p.id,{qty:nq}).then(function(){return logHistory(p,before,nq,"return",currentUser,"Return from "+(log.person||"customer"));});}
-      }
-    }).then(function(){showToast("Returned!");return doRefresh();}).catch(function(){showToast("Error","err");}).then(function(){retInFlight.delete(id);});
-  };});
+  document.querySelectorAll("[data-ret]").forEach(function(b){b.onclick=function(e){e.stopPropagation();openReturnForOrder(parseInt(b.dataset.ret));};});
+  if(activeTab==="ret")wireReturns();
   var oc=document.getElementById("orderChannel");
   if(oc){oc.value=currentChannel;oc.onchange=function(e){currentChannel=e.target.value;render();};}
   var op=document.getElementById("orderPerson");if(op)op.oninput=function(e){currentOrderPerson=e.target.value;};

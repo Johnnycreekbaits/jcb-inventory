@@ -183,19 +183,26 @@ function showARModal(){
   document.getElementById("arOverlay").onclick=function(e){if(e.target===this){this.remove();}};
 }
 function parseItems(raw){try{if(!raw)return[];var p=JSON.parse(raw);return Array.isArray(p)?p:(p.items&&Array.isArray(p.items)?p.items:[]);}catch(e){return[];}}
+// Partial returns (Returns tab) on orders still "Out": {logId:{pid:qtyReturned}}. Fully returned orders are excluded elsewhere.
+var partialReturns={};
+function setPartialReturns(rows){partialReturns={};rows.forEach(function(r){var m=partialReturns[r.log_id]||(partialReturns[r.log_id]={});(r.items||[]).forEach(function(i){m[i.pid]=(m[i.pid]||0)+i.qty;});});}
 function calcOrder(log,prods){
   var items=parseItems(log.items);
   var rev=0,cogs=0;
+  var back=log.st==="Out"&&partialReturns[log.id]?Object.assign({},partialReturns[log.id]):{};
+  var net=function(pid,qty){var r=Math.min(qty,back[pid]||0);if(r)back[pid]-=r;return qty-r;};
   if(items.length>0){
     items.forEach(function(item){
       var p=prods.find(function(x){return x.id===item.pid;});
-      rev+=item.qty*(item.price||0);
-      cogs+=getItemCOGS(item.qty,p);
+      var q=net(item.pid,item.qty);
+      rev+=q*(item.price||0);
+      cogs+=getItemCOGS(q,p);
     });
   }else{
     var p=prods.find(function(x){return x.id===log.pid;});
-    rev+=log.qty*getChannelPrice(p||{price:log.price||0,pack:8},log.ch||"Retail");
-    cogs+=getItemCOGS(log.qty,p);
+    var q=net(log.pid,log.qty);
+    rev+=q*getChannelPrice(p||{price:log.price||0,pack:8},log.ch||"Retail");
+    cogs+=getItemCOGS(q,p);
   }
   return{rev:rev,cogs:cogs};
 }
@@ -259,9 +266,10 @@ function boot(){
   Promise.all([
     dbGet("products","?order=name,color"),
     dbGet("logs","?order=date.desc"),
-    dbGet("expenses","?order=month.desc,created_at.desc").catch(function(){expReady=false;return[];})
+    dbGet("expenses","?order=month.desc,created_at.desc").catch(function(){expReady=false;return[];}),
+    dbGet("returns","?select=log_id,items&log_id=not.is.null").catch(function(){return[];})
   ]).then(function(res){
-    products=res[0];logs=res[1];expenses=res[2];
+    products=res[0];logs=res[1];expenses=res[2];setPartialReturns(res[3]);
     render();
     loadTransfers().then(function(){if(activeTab==="tr")render();});
     // Load cost profiles after initial render — non-blocking
