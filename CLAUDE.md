@@ -159,5 +159,6 @@ with the code. Update the sections above if architecture changed.
 - **2026-10-09** — Verified Shopify webhook live: ORD-0062–0066 (Shopify #1017–#1022) logged automatically.
   `shopify-order` now rounds `logs.price` to cents (ORD-0064 had stored 6.989999…; patched to 6.99). Decisions
   (Thomas): Shopify refunds/cancels are restocked by hand (no webhook); shipping cost stays manual by design
-  (no Shippo API); June–Aug expenses parked for later. Note: plain-text lines in `.env` (Klaviyo backup codes)
-  break `npx supabase functions deploy` env parsing — deploy from a temp copy with `--workdir` or comment them out.
+  (no Shippo API); June–Aug expenses parked for later. `.env` had plain-text Klaviyo backup codes
+  that broke `npx supabase functions deploy`; Thomas moved them out 2026-10-10. Keep `.env` KEY=VALUE only.
+  Deleted untracked `production-schedule.html` (stale June 30 snapshot). Closed Cloudflare bot PRs #5, #7.
