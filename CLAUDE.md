@@ -13,7 +13,6 @@ All pages are single-file HTML/CSS/JS — no build step, no framework, no npm. K
 |---|---|---|
 | `index.html` | Inventory app — tabs: Stock, Checkout, Labels, Reports, History, Import, Export | https://johnnycreekbaits.github.io/jcb-inventory/ |
 | `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Production, P&L, Expenses, Costs, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
-| `production-schedule.html` | Printable production schedule (not yet committed) | — |
 
 - **Repo:** https://github.com/Johnnycreekbaits/jcb-inventory
 - **Deploy:** push to `main` → GitHub Pages rebuilds (~2 min). `.github/workflows/deploy.yml`
