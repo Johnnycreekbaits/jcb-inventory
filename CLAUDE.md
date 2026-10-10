@@ -12,7 +12,7 @@ All pages are single-file HTML/CSS/JS — no build step, no framework, no npm. K
 | File | Purpose | Live URL |
 |---|---|---|
 | `index.html` | Inventory app — tabs: Stock, Checkout, Labels, Reports, History, Import, Export | https://johnnycreekbaits.github.io/jcb-inventory/ |
-| `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Production, P&L, Expenses, Costs, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
+| `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Production, P&L, Expenses, Costs, Transfers, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
 
 - **Repo:** https://github.com/Johnnycreekbaits/jcb-inventory
 - **Deploy:** push to `main` → GitHub Pages rebuilds (~2 min). `.github/workflows/deploy.yml`
@@ -29,7 +29,15 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   - `paid` = date string paid (null = unpaid) — drives AR in finance app
   - `ship_paid` / `ship_cost` = shipping charged to customer / label cost to us (numeric, null = not entered).
     Edited on the order detail modal; finance Dashboard has a Shipping card (not included in Net Profit).
-- `history` — audit log (JS var is `auditLog`, to avoid clashing with `window.history`)
+- `history` — audit log (JS var is `auditLog`, to avoid clashing with `window.history`).
+  `batch_id` (nullable) links a `production` row to the batch it was received from.
+- `production_batches` — bags made by JCB Manufacturing (batch_date, product_id/name/color, qty, batch_no,
+  made_by, note, entered_by, edited_by/edited_at). Logging a batch does NOT move stock; Receive Production does.
+  Received per batch = sum of history (qty_after − qty_before) with that batch_id; open = qty − received.
+- `transfer_pos` — intercompany POs JCB Manufacturing → Johnny Creek Baits, LLC (po_number, po_date, period_start/end,
+  status Draft/Issued/Received/Paid, markup_pct, vendor/buyer name+address, terms, notes, `lines` jsonb
+  `[{pid,name,color,series,qty,cost,price}]`, total, paid_date, created_by/updated_by). Schema + RLS in
+  `supabase/sql/2026-10-10_intercompany_transfers.sql` (run manually in the SQL editor — the CLI token has no DB access).
 - `expenses` — monthly expenses (month, category, amount, description, created_by)
 - `cost_profiles` — COGS per product (id, name, series, unit, cogs); seeded on first load
 
@@ -66,6 +74,18 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - Secret `ANTHROPIC_API_KEY` (Supabase Edge Function secrets + `.env`); Console spend limit $10/mo. JWT verification
   on (called with the anon key). ~3-5 cents per PDF.
 
+## Intercompany transfers
+- Inventory app Stock tab: **Log Batch Made** (no stock change) + **Receive Production** (batch picker fills product +
+  remaining qty, saves `history.batch_id`). "Recent batches" link → list with edit/delete. History filter has `production`.
+- Finance **Transfers** tab (month picker): Produced (batches) vs Received (history `production` rows) per product, open
+  batches (all months), "Other stock increases" (+ / add / positive adjustment / edit rows — possible unlogged production,
+  NOT on the PO), the month's batches (editable), and POs.
+- PO: prefilled from the period's received units; unit price = Costs-tab COGS × (1 + markup); markup defaults to the last
+  PO's, else 15%; Bundles + Apparel skipped. Everything editable; "Re-price at markup", "Refresh qty from inventory",
+  printable PO (same Save-as-PDF bar as the invoice). Default note "For resale — sales tax exempt (CDTFA-230 on file)".
+- Finance app has no per-person login: it reuses `localStorage.jcb_user` (same origin as the inventory app) or asks once
+  on the Transfers tab, for entered_by / updated_by.
+
 ## Channels & Pricing (index.html)
 `["DTC","Dealer","Distro","Pro Staff","Sponsorship/Promo","Internal"]`
 - Sponsorship/Promo, Internal, Sample/Promo → $0 revenue
@@ -83,7 +103,8 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - `adjInFlight` Set guards +/− stock buttons against double-fire
 - **Rule:** any button that triggers a Supabase write chain needs a double-submit guard
   (disable + "Saving..."). `btnSaveOrder`, `confirmOrder()` (`orderInFlight`) and the
-  return-order `[data-ret]` handler (`retInFlight` Set + confirm prompt) all have one.
+  return-order `[data-ret]` handler (`retInFlight` Set + confirm prompt) all have one; so do
+  batch save/delete (`batchInFlight`), Receive Production, and Transfers batch/PO save/delete (`trInFlight`).
 - Variety Pack order lines (pid 1201) carry a `components` array. Any code that moves stock
   for an order (checkout, return, edit) must adjust the component bags, never pid 1201.
 - Variety Pack (Bundles): always Ringo's Gift + top Nekos/Finesse Worms by stock
@@ -162,3 +183,12 @@ with the code. Update the sections above if architecture changed.
   (no Shippo API); June–Aug expenses parked for later. `.env` had plain-text Klaviyo backup codes
   that broke `npx supabase functions deploy`; Thomas moved them out 2026-10-10. Keep `.env` KEY=VALUE only.
   Deleted untracked `production-schedule.html` (stale June 30 snapshot). Closed Cloudflare bot PRs #5, #7.
+- **2026-10-10** — Intercompany transfer system (JCB Manufacturing → Johnny Creek Baits, LLC): new tables
+  `production_batches`, `transfer_pos`, `history.batch_id` (SQL in `supabase/sql/`, run by Thomas in the SQL editor).
+  Inventory app: Log Batch Made, batch list (edit/delete), batch picker on Receive Production, `production` + `+`
+  History filters. Finance app: Transfers tab + editable intercompany POs with printable PDF. Nightly backup now
+  includes the two new tables. Tested end-to-end in headless Chromium against live Supabase with sample rows
+  (user "Claude Test", batch TEST-001, PO TEST-PO-1) — 31/31 checks; all sample rows deleted and the test product's
+  stock restored. Note: most past production went in via `+` taps (278 `+` vs 1 `production` row), so expect those to
+  show under "Other stock increases" until the team switches to Log Batch + Receive Production.
+  Open: fill in real vendor/buyer addresses on the first PO (they carry forward to later POs).
