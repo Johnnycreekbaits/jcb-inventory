@@ -11,7 +11,7 @@ import sys
 import urllib.request
 from datetime import datetime
 
-TABLES = ["products", "logs", "history", "expenses", "cost_profiles"]
+TABLES = ["products", "logs", "history", "expenses", "cost_profiles", "production_batches", "transfer_pos"]
 BACKUP_ROOT = r"G:\My Drive\JCB Backups\Supabase"
 PAGE = 1000
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,7 +69,7 @@ def main():
             json.dump(rows, f, indent=1, ensure_ascii=False)
         write_csv(os.path.join(out, f"{t}.csv"), rows)
         summary[t] = len(rows)
-        print(f"  {t:<14} {len(rows):>5} rows")
+        print(f"  {t:<18} {len(rows):>5} rows")
     with open(os.path.join(out, "_summary.json"), "w", encoding="utf-8") as f:
         json.dump({"backed_up_at": datetime.now().isoformat(timespec="seconds"), "rows": summary}, f, indent=1)
     print(f"Backup saved to {out}")

@@ -139,8 +139,8 @@ function dbPatch(t,f,b){
 function dbDelete(t,f){
   return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});
 }
-function logHistory(prod,before,after,type,who,note){
-  return dbPost("history",{id:Date.now()+(Math.random()*1000|0),product_id:prod.id,product_name:prod.name,color:prod.color||"",change_type:type,qty_before:before,qty_after:after,changed_by:who,note:note||""}).catch(function(e){console.warn("History:",e);});
+function logHistory(prod,before,after,type,who,note,extra){
+  return dbPost("history",Object.assign({id:Date.now()+(Math.random()*1000|0),product_id:prod.id,product_name:prod.name,color:prod.color||"",change_type:type,qty_before:before,qty_after:after,changed_by:who,note:note||""},extra||{})).catch(function(e){console.warn("History:",e);});
 }
 function parseOrderItems(itemsStr){
   try{if(!itemsStr)return{items:[],state:""};var d=JSON.parse(itemsStr);if(Array.isArray(d))return{items:d,state:""};return{items:d.items||[],state:d.state||""};}catch(e){return{items:[],state:""};}
@@ -306,6 +306,7 @@ var TODAY=new Date().toISOString().slice(0,10);
 
 var products=[],logs=[],auditLog=[],labelDefs=[],adjInFlight=new Set();
 var retInFlight=new Set();
+var batches=[],batchRecv={},batchesReady=false,batchInFlight=false;
 var activeTab="inv",search="",activeSeries="All",activeStockFilter=null,logFilter="All",histFilter="All",activeLabelProduct=null;
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
 var lastSync=null,cart=JSON.parse(localStorage.getItem("jcb_cart")||"[]"),currentUser=localStorage.getItem("jcb_user")||"",currentChannel="DTC";
@@ -353,6 +354,8 @@ function boot(){
     return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());
   }).then(function(h){
     auditLog=h;
+    return loadBatches();
+  }).then(function(){
     return dbGet("labels","?order=product,color").catch(function(){return [];});
   }).then(function(lb){
     if(lb.length===0){
@@ -377,7 +380,7 @@ function isTypingInApp(){
   return !!(appEl&&appEl.contains(el));
 }
 function doRefresh(){
-  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();if(!isTypingInApp())render();}).catch(function(){});
+  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;return loadBatches();}).then(function(){return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();if(!isTypingInApp())render();}).catch(function(){});
 }
 setInterval(doRefresh,10000);
 
@@ -589,7 +592,8 @@ function invHTML(){
   // Build unique color list from products
   var allColors=[...new Set(products.map(function(p){return p.color;}).filter(Boolean))].sort();
   var colorTabs=allColors.map(function(c){return'<button class="series-btn'+(search===c?" active":"")+'" data-colorsearch="'+c+'" style="display:flex;align-items:center;gap:4px;">'+dotHtml(c,8)+c+'</button>';}).join("");
-  return'<button class="btn-primary" id="btnReceiveProd" style="width:100%;margin-bottom:10px;font-size:13px;padding:10px;">+ Receive Production Run</button><div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><button data-stockfilter="Low" class="kpi" style="background:#fffbeb;border:2px solid '+(activeStockFilter==="Low"?"#d97706":"#fde68a")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Low"?"0 0 0 2px #fde68a":"none")+';"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></button><button data-stockfilter="Out" class="kpi" style="background:#fef2f2;border:2px solid '+(activeStockFilter==="Out"?"#dc2626":"#fecaca")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Out"?"0 0 0 2px #fecaca":"none")+';"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></button><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+escAttr(search)+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div style="margin-bottom:8px;"><div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:6px;">SEARCH BY COLOR</div><div class="series-bar">'+colorTabs+'</div></div><div class="count-label">'+f.length+" VARIANTS</div>"+hiddenHint+cards;
+  var nOpen=openBatches().length;
+  return'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;"><button class="btn-outline" id="btnLogBatch" style="font-size:13px;padding:10px;">&#x1F9EA; Log Batch Made</button><button class="btn-primary" id="btnReceiveProd" style="font-size:13px;padding:10px;">+ Receive Production</button></div>'+(batchesReady?'<button id="btnBatchList" style="display:block;width:100%;background:none;border:none;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:10px;font-family:inherit;">Recent batches &middot; '+nOpen+' open (not fully received) &rsaquo;</button>':'<div style="margin-bottom:10px;"></div>')+'<div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><button data-stockfilter="Low" class="kpi" style="background:#fffbeb;border:2px solid '+(activeStockFilter==="Low"?"#d97706":"#fde68a")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Low"?"0 0 0 2px #fde68a":"none")+';"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></button><button data-stockfilter="Out" class="kpi" style="background:#fef2f2;border:2px solid '+(activeStockFilter==="Out"?"#dc2626":"#fecaca")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Out"?"0 0 0 2px #fecaca":"none")+';"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></button><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+escAttr(search)+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div style="margin-bottom:8px;"><div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:6px;">SEARCH BY COLOR</div><div class="series-bar">'+colorTabs+'</div></div><div class="count-label">'+f.length+" VARIANTS</div>"+hiddenHint+cards;
 }
 
 function coHTML(){
@@ -641,7 +645,7 @@ function histHTML(){
   var typeColors={checkout:"#eff6ff",adjustment:"#fffbeb","+":"#f0fdf4","-":"#fef2f2",add:"#f0fdf4",edit:"#fffbeb","delete":"#fef2f2","return":"#dcfce7","order-edit":"#faf5ff",production:"#faf5ff"};
   var typeText={checkout:"#2563eb",adjustment:"#d97706","+":"#16a34a","-":"#dc2626",add:"#16a34a",edit:"#d97706","delete":"#dc2626","return":"#16a34a","order-edit":"#7c3aed",production:"#7c3aed"};
   var cards=vis.length===0?'<div class="card" style="text-align:center;color:#94a3b8;padding:36px;"><div style="font-size:36px;">&#x1F4CB;</div><div style="margin-top:8px;">No history yet</div></div>':vis.map(function(h){var diff=(h.qty_after||0)-(h.qty_before||0);var diffStr=diff>0?"+"+diff:String(diff);var diffColor=diff>0?"#16a34a":diff<0?"#dc2626":"#64748b";var bg=typeColors[h.change_type]||"#f1f5f9";var tc=typeText[h.change_type]||"#64748b";return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:13px;">'+(h.product_name||"")+(h.color?" &mdash; "+h.color:"")+'</span><span class="hist-badge" style="background:'+bg+';color:'+tc+';">'+h.change_type+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">&#x1F464; <strong>'+(h.changed_by||"Unknown")+"</strong>"+(h.note?" &middot; "+h.note:"")+'</div></div><div style="text-align:right;flex-shrink:0;margin-left:8px;"><div style="font-family:\'Bebas Neue\',cursive;font-size:18px;color:'+diffColor+';">'+diffStr+'</div><div style="font-size:9px;color:#94a3b8;">'+(h.qty_before||0)+"&rarr;"+(h.qty_after||0)+'</div></div></div><div style="font-size:10px;color:#94a3b8;">'+fmtDate(h.changed_at)+"</div></div>";}).join("");
-  return'<div class="section-title">INVENTORY HISTORY</div><div class="section-sub">Every change with who made it and when &middot; last 30 days</div><div class="filter-bar">'+["All","checkout","adjustment","add","edit","delete","return","order-edit"].map(function(f){return'<button class="filter-btn'+(histFilter===f?" active":"")+'" data-histf="'+f+'">'+f+"</button>";}).join("")+'</div><button class="btn-outline" id="btnExportHist" style="width:100%;margin-bottom:14px;">&#x2B07;&#xFE0F; Export History CSV</button>'+cards;
+  return'<div class="section-title">INVENTORY HISTORY</div><div class="section-sub">Every change with who made it and when &middot; last 30 days</div><div class="filter-bar">'+["All","checkout","production","+","adjustment","add","edit","delete","return","order-edit"].map(function(f){return'<button class="filter-btn'+(histFilter===f?" active":"")+'" data-histf="'+f+'">'+f+"</button>";}).join("")+'</div><button class="btn-outline" id="btnExportHist" style="width:100%;margin-bottom:14px;">&#x2B07;&#xFE0F; Export History CSV</button>'+cards;
 }
 
 function repHTML(){
@@ -760,22 +764,120 @@ function delModal(id){
   };
 }
 
+// ── Production batches (JCB Manufacturing makes them; Receive Production moves them into inventory) ──
+function loadBatches(){
+  return Promise.all([
+    dbGet("production_batches","?order=batch_date.desc,created_at.desc"),
+    dbGet("history","?select=batch_id,qty_before,qty_after&batch_id=not.is.null")
+  ]).then(function(r){
+    batches=r[0];batchRecv={};
+    r[1].forEach(function(h){batchRecv[h.batch_id]=(batchRecv[h.batch_id]||0)+((h.qty_after||0)-(h.qty_before||0));});
+    batchesReady=true;
+  }).catch(function(){batchesReady=false;});
+}
+function batchLeft(b){return b.qty-(batchRecv[b.id]||0);}
+function openBatches(){return batches.filter(function(b){return batchLeft(b)>0;});}
+function localToday(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function escHtml(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function batchLabel(b){return(b.batch_no?b.batch_no+" · ":"")+b.batch_date+" · "+b.product_name+(b.color?" — "+b.color:"");}
+function nextBatchNo(){var mx=0;batches.forEach(function(b){var m=String(b.batch_no||"").match(/(\d+)\s*$/);if(m)mx=Math.max(mx,parseInt(m[1]));});return"B-"+String(mx+1).padStart(3,"0");}
+
+function batchModal(id){
+  if(!batchesReady){showToast("Batches table not set up yet","err");return;}
+  var b=id?batches.find(function(x){return x.id===id;}):null;
+  if(id&&!b)return;
+  var rec=b?(batchRecv[b.id]||0):0;
+  var prodOpts=products.filter(function(p){return p.series!=="Bundles"&&p.series!=="Apparel";}).map(function(p){return'<option value="'+p.id+'"'+(b&&b.product_id===p.id?" selected":"")+'>'+escHtml(p.name+(p.color?" — "+p.color:""))+'</option>';}).join("");
+  var who=["Thomas","Mike","Greg"];if(currentUser&&who.indexOf(currentUser)<0)who.push(currentUser);
+  var madeBy=b?b.made_by:currentUser;
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mBatch"><div class="modal sheet"><div class="modal-header"><div class="modal-title">'+(b?"EDIT BATCH":"LOG BATCH MADE")+'</div><button class="close-btn" id="mBClose">&times;</button></div>'
+    +'<div style="font-size:11px;color:#64748b;margin-bottom:14px;">Bags made by JCB Manufacturing. This does <strong>not</strong> change stock &mdash; use Receive Production when they go on the shelf.</div>'
+    +'<div class="field-wrap"><label class="field-label">Product</label><select class="field-input" id="bProd">'+prodOpts+'</select></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Bags Made</label><input class="field-input" type="number" min="1" id="bQty" value="'+(b?b.qty:"")+'" placeholder="e.g. 200"/></div><div class="field-wrap"><label class="field-label">Date Made</label><input class="field-input" type="date" id="bDate" value="'+(b?b.batch_date:localToday())+'"/></div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Batch #</label><input class="field-input" id="bNo" value="'+escHtml(b?b.batch_no:nextBatchNo())+'"/></div><div class="field-wrap"><label class="field-label">Made By</label><input class="field-input" id="bMadeBy" list="bWhoList" value="'+escHtml(madeBy)+'"/><datalist id="bWhoList">'+who.map(function(w){return'<option value="'+escHtml(w)+'">';}).join("")+'</datalist></div></div>'
+    +'<div class="field-wrap"><label class="field-label">Notes (optional)</label><input class="field-input" id="bNote" value="'+escHtml(b?b.note:"")+'" placeholder="e.g. Heater 2, red flake"/></div>'
+    +(b?'<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">Entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+' &middot; '+rec+' received so far</div>':'')
+    +'<button class="btn-primary" id="btnBSave" style="width:100%;padding:13px;font-size:14px;">'+(b?"Save Changes":"Log Batch")+'</button></div></div>');
+  var close=function(){var m=document.getElementById("mBatch");if(m)m.remove();};
+  document.getElementById("mBClose").onclick=close;
+  document.getElementById("mBatch").onclick=function(e){if(e.target===this)close();};
+  document.getElementById("btnBSave").onclick=function(){
+    if(batchInFlight)return;
+    var pid=parseInt(document.getElementById("bProd").value);
+    var p=products.find(function(x){return x.id===pid;});
+    var qty=parseInt(document.getElementById("bQty").value)||0;
+    var date=document.getElementById("bDate").value;
+    if(!p){showToast("Pick a product","err");return;}
+    if(qty<=0){showToast("Enter bags made","err");return;}
+    if(!date){showToast("Enter the date made","err");return;}
+    if(b&&qty<rec&&!confirm(rec+" bags from this batch are already received into inventory, which is more than "+qty+". Save anyway?"))return;
+    var row={batch_date:date,product_id:p.id,product_name:p.name,color:p.color||"",qty:qty,batch_no:document.getElementById("bNo").value.trim(),made_by:document.getElementById("bMadeBy").value.trim(),note:document.getElementById("bNote").value.trim()};
+    var btn=document.getElementById("btnBSave");batchInFlight=true;btn.disabled=true;btn.textContent="Saving...";
+    var req=b?dbPatch("production_batches","id=eq."+b.id,Object.assign(row,{edited_by:currentUser,edited_at:new Date().toISOString()}))
+             :dbPost("production_batches",Object.assign(row,{id:Date.now()+(Math.random()*1000|0),entered_by:currentUser}));
+    req.then(function(){close();showToast(b?"Batch updated":"Logged "+qty+" × "+p.name+(p.color?" "+p.color:""));return loadBatches();})
+      .then(function(){render();})
+      .catch(function(e){showToast("Error: "+e.message,"err");btn.disabled=false;btn.textContent=b?"Save Changes":"Log Batch";})
+      .then(function(){batchInFlight=false;});
+  };
+}
+
+function batchListModal(){
+  var list=batches.slice(0,60);
+  var rows=list.length===0?'<div style="text-align:center;color:#94a3b8;padding:30px;">No batches logged yet</div>':list.map(function(b){
+    var rec=batchRecv[b.id]||0,left=b.qty-rec;
+    var st=left>0?'<span class="hist-badge" style="background:#fff7ed;color:#ea580c;">'+left+' open</span>':left<0?'<span class="hist-badge" style="background:#fef2f2;color:#dc2626;">over by '+(-left)+'</span>':'<span class="hist-badge" style="background:#dcfce7;color:#16a34a;">received</span>';
+    return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">'+escHtml(b.product_name+(b.color?" — "+b.color:""))+' '+st+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:3px;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; made '+b.qty+' &middot; received '+rec+'</div>'
+      +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Made by '+escHtml(b.made_by||"?")+' &middot; entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+(b.note?' &middot; '+escHtml(b.note):'')+'</div></div>'
+      +'<div style="display:flex;gap:5px;flex-shrink:0;"><button class="edit-btn" data-bedit="'+b.id+'">&#x270F;&#xFE0F;</button><button class="del-btn" data-bdel="'+b.id+'">&#x1F5D1;&#xFE0F;</button></div></div></div>';
+  }).join("");
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mBatchList"><div class="modal sheet"><div class="modal-header"><div class="modal-title">PRODUCTION BATCHES</div><button class="close-btn" id="mBLClose">&times;</button></div><button class="btn-outline" id="btnBLNew" style="width:100%;margin-bottom:12px;">&#x1F9EA; Log Batch Made</button>'+rows+'</div></div>');
+  var close=function(){var m=document.getElementById("mBatchList");if(m)m.remove();};
+  document.getElementById("mBLClose").onclick=close;
+  document.getElementById("mBatchList").onclick=function(e){if(e.target===this)close();};
+  document.getElementById("btnBLNew").onclick=function(){close();batchModal(null);};
+  document.querySelectorAll("[data-bedit]").forEach(function(btn){btn.onclick=function(){close();batchModal(parseInt(btn.dataset.bedit));};});
+  document.querySelectorAll("[data-bdel]").forEach(function(btn){btn.onclick=function(){
+    if(batchInFlight)return;
+    var b=batches.find(function(x){return x.id===parseInt(btn.dataset.bdel);});if(!b)return;
+    var rec=batchRecv[b.id]||0;
+    if(!confirm("Delete batch "+(b.batch_no||"")+" ("+b.qty+" × "+b.product_name+(b.color?" "+b.color:"")+")?"+(rec?"\n\n"+rec+" bags were already received from it. Inventory is NOT changed; those receipts will just show as not linked to a batch.":"")))return;
+    batchInFlight=true;btn.disabled=true;
+    dbDelete("production_batches","id=eq."+b.id).then(function(){showToast("Batch deleted");return loadBatches();})
+      .then(function(){close();render();batchListModal();})
+      .catch(function(e){showToast("Error: "+e.message,"err");btn.disabled=false;})
+      .then(function(){batchInFlight=false;});
+  };});
+}
+
 function receiveProductionModal(){
-  var prodOpts=products.map(function(p){return'<option value="'+p.id+'">'+p.name+(p.color?' — '+p.color:'')+'</option>';}).join("");
-  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mRecvProd"><div class="modal sheet"><div class="modal-header"><div class="modal-title">RECEIVE PRODUCTION</div><button class="close-btn" id="mRPClose">&times;</button></div><div class="field-wrap"><label class="field-label">Product</label><select class="field-input" id="rpProd">'+prodOpts+'</select></div><div class="field-wrap"><label class="field-label">Bags / Units Received</label><input class="field-input" type="number" min="1" id="rpQty" placeholder="e.g. 200"/></div><div class="field-wrap"><label class="field-label">Batch / Notes (optional)</label><input class="field-input" id="rpNote" placeholder="e.g. June 2026 run"/></div><button class="btn-primary" id="btnRPConfirm" style="width:100%;padding:13px;font-size:14px;">Add to Inventory</button></div></div>');
+  var prodOpts=products.map(function(p){return'<option value="'+p.id+'">'+escHtml(p.name+(p.color?' — '+p.color:''))+'</option>';}).join("");
+  var ob=openBatches();
+  var batchField=batchesReady?'<div class="field-wrap"><label class="field-label">Batch</label><select class="field-input" id="rpBatch"><option value="">&mdash; No batch (not logged) &mdash;</option>'+ob.map(function(b){return'<option value="'+b.id+'">'+escHtml(batchLabel(b))+' · '+batchLeft(b)+' left</option>';}).join("")+'</select>'+(ob.length?'':'<div style="font-size:10px;color:#94a3b8;margin-top:4px;">No open batches. Log one with &ldquo;Log Batch Made&rdquo;.</div>')+'</div>':'';
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mRecvProd"><div class="modal sheet"><div class="modal-header"><div class="modal-title">RECEIVE PRODUCTION</div><button class="close-btn" id="mRPClose">&times;</button></div>'+batchField+'<div class="field-wrap"><label class="field-label">Product</label><select class="field-input" id="rpProd">'+prodOpts+'</select></div><div class="field-wrap"><label class="field-label">Bags / Units Received</label><input class="field-input" type="number" min="1" id="rpQty" placeholder="e.g. 200"/></div><div class="field-wrap"><label class="field-label">Notes (optional)</label><input class="field-input" id="rpNote" placeholder="e.g. June 2026 run"/></div><button class="btn-primary" id="btnRPConfirm" style="width:100%;padding:13px;font-size:14px;">Add to Inventory</button></div></div>');
   document.getElementById("mRPClose").onclick=function(){document.getElementById("mRecvProd").remove();};
   document.getElementById("mRecvProd").onclick=function(e){if(e.target===this)this.remove();};
+  var selB=document.getElementById("rpBatch");
+  var pickedBatch=function(){return selB&&selB.value?batches.find(function(b){return b.id===parseInt(selB.value);}):null;};
+  if(selB)selB.onchange=function(){
+    var b=pickedBatch(),ps=document.getElementById("rpProd");
+    ps.disabled=!!b;
+    if(b){ps.value=String(b.product_id);document.getElementById("rpQty").value=batchLeft(b);}
+  };
   document.getElementById("btnRPConfirm").onclick=function(){
-    var pid=parseInt(document.getElementById("rpProd").value);
+    var b=pickedBatch();
+    var pid=b?b.product_id:parseInt(document.getElementById("rpProd").value);
     var qty=parseInt(document.getElementById("rpQty").value)||0;
-    var note=(document.getElementById("rpNote").value.trim()||"Production received");
+    var note=document.getElementById("rpNote").value.trim()||(b?"Batch "+(b.batch_no||b.batch_date):"Production received");
     if(qty<=0){showToast("Enter a quantity","err");return;}
-    var p=products.find(function(x){return x.id===pid;});if(!p)return;
+    var p=products.find(function(x){return x.id===pid;});if(!p){showToast("Batch product no longer exists","err");return;}
+    if(b&&qty>batchLeft(b)&&!confirm("Batch "+(b.batch_no||"")+" only has "+batchLeft(b)+" bags left. Receive "+qty+" anyway?"))return;
     var before=p.qty,nq=before+qty;
-    var btn=document.getElementById("btnRPConfirm");btn.disabled=true;btn.textContent="Saving...";
+    var btn=document.getElementById("btnRPConfirm");if(btn.disabled)return;btn.disabled=true;btn.textContent="Saving...";
     dbPatch("products","id=eq."+pid,{qty:nq}).then(function(){
       p.qty=nq;
-      return logHistory(p,before,nq,"production",currentUser,note);
+      return logHistory(p,before,nq,"production",currentUser,note,b?{batch_id:b.id}:null);
     }).then(function(){
       document.getElementById("mRecvProd").remove();
       showToast("Added "+qty+" × "+p.name+(p.color?" "+p.color:"")+" to inventory!");
@@ -1047,6 +1149,8 @@ function wire(){
   });
   document.querySelectorAll("[data-cartrem]").forEach(function(b){b.onclick=function(){cart.splice(parseInt(b.dataset.cartrem),1);saveCart();render();};});
   var btnRP=document.getElementById("btnReceiveProd");if(btnRP)btnRP.onclick=function(){receiveProductionModal();};
+  var btnLB=document.getElementById("btnLogBatch");if(btnLB)btnLB.onclick=function(){batchModal(null);};
+  var btnBL=document.getElementById("btnBatchList");if(btnBL)btnBL.onclick=function(){batchListModal();};
   var btnConfirm=document.getElementById("btnConfirmOrder");if(btnConfirm)btnConfirm.onclick=function(){confirmOrder();};
   var btnClear=document.getElementById("btnClearCart");if(btnClear)btnClear.onclick=function(){cart=[];saveCart();render();};
   document.querySelectorAll("[data-edit]").forEach(function(b){b.onclick=function(){addModal(parseInt(b.dataset.edit));};});
