@@ -11,7 +11,7 @@ import sys
 import urllib.request
 from datetime import datetime
 
-TABLES = ["products", "logs", "history", "expenses", "cost_profiles", "production_batches", "transfer_pos"]
+TABLES = ["products", "logs", "history", "expenses", "cost_profiles", "production_batches", "transfer_pos", "returns"]
 BACKUP_ROOT = r"G:\My Drive\JCB Backups\Supabase"
 PAGE = 1000
 HERE = os.path.dirname(os.path.abspath(__file__))

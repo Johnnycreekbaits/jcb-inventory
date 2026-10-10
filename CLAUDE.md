@@ -11,7 +11,7 @@ All pages are single-file HTML/CSS/JS — no build step, no framework, no npm. K
 
 | File | Purpose | Live URL |
 |---|---|---|
-| `index.html` | Inventory app — tabs: Stock, Checkout, Labels, Reports, History, Import, Export | https://johnnycreekbaits.github.io/jcb-inventory/ |
+| `index.html` | Inventory app — tabs: Stock, Checkout, Returns, Labels, Reports, History, Import, Export | https://johnnycreekbaits.github.io/jcb-inventory/ |
 | `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Production, P&L, Expenses, Costs, Transfers, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
 
 - **Repo:** https://github.com/Johnnycreekbaits/jcb-inventory
@@ -30,7 +30,11 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   - `ship_paid` / `ship_cost` = shipping charged to customer / label cost to us (numeric, null = not entered).
     Edited on the order detail modal; finance Dashboard has a Shipping card (not included in Net Profit).
 - `history` — audit log (JS var is `auditLog`, to avoid clashing with `window.history`).
-  `batch_id` (nullable) links a `production` row to the batch it was received from.
+  `batch_id` (nullable) links a `production` row to the batch it was received from; `return_id` links a `return` row
+  to its `returns` record.
+- `returns` — every return (Returns tab): return_date, log_id (null = no order), order_name, person, channel,
+  `items` jsonb `[{pid,name,color,qty,price,components?}]`, reason, note, restocked (false = damaged/written off),
+  returned_by. SQL: `supabase/sql/2026-10-10_returns.sql`.
 - `production_batches` — bags made by JCB Manufacturing (batch_date, product_id/name/color, qty, batch_no,
   made_by, note, entered_by, edited_by/edited_at). Logging a batch does NOT move stock; Receive Production does.
   Received per batch = sum of history (qty_after − qty_before) with that batch_id; open = qty − received.
@@ -73,6 +77,16 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   lines as the normal import preview (with a total-vs-report check) and saves via the existing Apply button.
 - Secret `ANTHROPIC_API_KEY` (Supabase Edge Function secrets + `.env`); Console spend limit $10/mo. JWT verification
   on (called with the anon key). ~3-5 cents per PDF.
+
+## Returns (index.html Returns tab)
+- All returns go through this tab: Checkout's "Return" button opens it with the order preselected. "From an order"
+  allows partial returns (per line, capped at what's still out); "No order" for stock taken out without one.
+  Reason required; "Damaged / defective" unticks "Put back in stock" (recorded + history row with no qty change).
+- Order flips to `st:"Returned"` (ret = return date) only when every line is fully back. Variety Pack lines restock
+  their component bags. Return Log also lists pre-tab full returns (orders `Returned` with no `returns` row) as "legacy".
+- Finance `calcOrder()` subtracts partial returns (`partialReturns` map from `returns` with log_id) on orders still
+  "Out"; fully returned orders are excluded as before. Returns use `change_type:"return"`, so they never show as
+  possible production on the Transfers tab. Don't restock with "+".
 
 ## Intercompany transfers
 - Inventory app Stock tab: **Log Batch Made** (no stock change) + **Receive Production** (batch picker fills product +
@@ -192,3 +206,8 @@ with the code. Update the sections above if architecture changed.
   stock restored. Note: most past production went in via `+` taps (278 `+` vs 1 `production` row), so expect those to
   show under "Other stock increases" until the team switches to Log Batch + Receive Production.
   Open: fill in real vendor/buyer addresses on the first PO (they carry forward to later POs).
+- **2026-10-10** — Returns tab (inventory app): from-an-order (partial) or no-order returns with reason/note/date/
+  restock flag, Return Log (+ legacy full returns, CSV export), Checkout "Return" button now routes here, "N returned"
+  badge on partially returned orders. New `returns` table + `history.return_id` (SQL run by Thomas). Finance revenue/
+  COGS net out partial returns. Nightly backup includes `returns`. Tested 18/18 against live Supabase with a sample
+  order (TEST-ORD-1); all sample rows removed and stock restored.
