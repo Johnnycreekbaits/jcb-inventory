@@ -157,3 +157,8 @@ with the code. Update the sections above if architecture changed.
   added "Rent" expense category. Tested on May and Sept 2026 reports (sums $2,987 / $8,835 vs printed $2,988 /
   $8,836 — whole-dollar rounding). Found May's saved "Shop Expense $497" came from the LAST YEAR column (May CURR MO
   = 0) — flagged to Thomas to delete. June–Sept expenses not yet entered.
+- **2026-10-09** — Verified Shopify webhook live: ORD-0062–0066 (Shopify #1017–#1022) logged automatically.
+  `shopify-order` now rounds `logs.price` to cents (ORD-0064 had stored 6.989999…; patched to 6.99). Decisions
+  (Thomas): Shopify refunds/cancels are restocked by hand (no webhook); shipping cost stays manual by design
+  (no Shippo API); June–Aug expenses parked for later. Note: plain-text lines in `.env` (Klaviyo backup codes)
+  break `npx supabase functions deploy` env parsing — deploy from a temp copy with `--workdir` or comment them out.

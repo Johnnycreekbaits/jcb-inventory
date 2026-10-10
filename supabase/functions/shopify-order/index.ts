@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       method: "POST", headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
         id: order.id, name: orderLabel, color: "", pid: plan.items[0].pid, qty: plan.totalQty,
-        price: plan.totalQty > 0 ? plan.totalVal / plan.totalQty : 0, ch: plan.channel, person, project: label,
+        price: plan.totalQty > 0 ? Math.round((plan.totalVal / plan.totalQty) * 100) / 100 : 0, ch: plan.channel, person, project: label,
         date: String(order.created_at || new Date().toISOString()).slice(0, 10),
         items: JSON.stringify({ state, items: plan.items, ...(plan.skipped.length ? { skipped: plan.skipped } : {}) }),
         ret: null, st: "Out", ship_paid: plan.shipPaid,
