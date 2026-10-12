@@ -228,5 +228,6 @@ with the code. Update the sections above if architecture changed.
   Pumpkin Black Flake (815048/815185); Midnight Haze Black Flake = Purple w/ Black Flake; Melon Punch Purple Flake = Melon
   Purple Flake; Ringo's Gift Red / Black / Red & Black Flake = Ringo Red / Ringo Black / Ringo with Black & Red Flake;
   Melon Punch Red & Black = Melon with Black & Red; Neko GP Red Flake = Light Green Pumpkin Red Flake; Terp Blue Shadow =
-  Blue Shad. Stick Bait "Baby Bass" (retail + WS) intentionally left WITHOUT a SKU per Thomas — its orders will show
-  "not matched" in the app.
+  Blue Shad. Stick Bait Baby Bass: app color renamed "Baby Bass White & Melon" → "Baby Bass" (product 2034) to match
+  Shopify; Shopify retail + WS SKU set to 850070815116. Google Sheet keeps its longer name on purpose. Every bait variant
+  in Shopify now has a SKU.
