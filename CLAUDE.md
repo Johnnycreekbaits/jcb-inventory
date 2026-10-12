@@ -224,6 +224,9 @@ with the code. Update the sections above if architecture changed.
   the missing lines on ORD-0066/0068 (history note "backfilled 2026-10-12"); set 51 Shopify variant SKUs (28 colors,
   retail + WS) verified against the barcode sheet. Oversold at 0 in app (physically shipped): Paddle Tail Purple
   Shimmer, Soft Jerk Midnight Silver, Baby Hawg Blackberry — counts need checking.
-  Open: 17 Shopify variants still without SKU where Shopify and app names differ (Neko/Finesse Ringo's Gift
-  Red/Black/Red & Black Flake, Melon Punch Purple / Red & Black Flake, GP Light Black Flake, Midnight Haze Black Flake,
-  Neko GP Red Flake, Stick Baby Bass, Terp Blue Shadow) — waiting on Thomas to confirm names.
+  Later 2026-10-12 (Thomas confirmed): set 32 more SKUs. Shopify name -> sheet name: GP Light Black Flake = Light Green
+  Pumpkin Black Flake (815048/815185); Midnight Haze Black Flake = Purple w/ Black Flake; Melon Punch Purple Flake = Melon
+  Purple Flake; Ringo's Gift Red / Black / Red & Black Flake = Ringo Red / Ringo Black / Ringo with Black & Red Flake;
+  Melon Punch Red & Black = Melon with Black & Red; Neko GP Red Flake = Light Green Pumpkin Red Flake; Terp Blue Shadow =
+  Blue Shad. Stick Bait "Baby Bass" (retail + WS) intentionally left WITHOUT a SKU per Thomas — its orders will show
+  "not matched" in the app.
