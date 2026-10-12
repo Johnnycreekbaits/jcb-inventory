@@ -12,7 +12,7 @@ export type OrderItem = {
   pid: number; name: string; color: string; qty: number; price: number;
   components?: Component[];
 };
-export type Skipped = { sku: string | null; title: string; qty: number; reason: string };
+export type Skipped = { sku: string | null; title: string; qty: number; reason: string; price?: number; ws?: boolean };
 export type Plan = {
   channel: "DTC" | "Dealer";
   items: OrderItem[];
@@ -87,10 +87,12 @@ export function planOrder(order: any, products: Product[]): Plan {
       continue;
     }
 
-    if (!sku) { skipped.push({ sku, title, qty, reason: "no SKU" }); continue; }
+    // price + ws let the app's "Match items" add the line later at what the customer actually paid
+    const miss = (reason: string) => skipped.push({ sku, title, qty, reason, price: round2(paidUnitPrice(li)), ws: isWholesale(li) });
+    if (!sku) { miss("no SKU"); continue; }
     if (sku.startsWith("PF-")) { skipped.push({ sku, title, qty, reason: "Printify apparel" }); continue; }
     const prod = byBarcode.get(sku);
-    if (!prod) { skipped.push({ sku, title, qty, reason: "SKU not found in products.barcode" }); continue; }
+    if (!prod) { miss("SKU not found in products.barcode"); continue; }
 
     const ws = isWholesale(li);
     if (ws) anyWs = true;

@@ -68,6 +68,10 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - Writes like `confirmOrder()`: next `ORD-####`, project "Shopify #1234", history `changed_by` "Shopify".
   `logs.id` = Shopify order id, so webhook retries hit a PK conflict and don't double-deduct.
   Test and cancelled orders are ignored. Stock floors at 0 (oversell logged).
+- Unmatched lines (no SKU / unknown SKU) are stored in `items.skipped` with `price` + `ws`; the order is ALWAYS logged
+  unless every skipped line is Printify apparel (pid 0 / qty 0 if nothing matched). The app shows a red "N items not
+  matched" block on the Checkout card + order detail with a **Match items** button (`matchUnmatchedModal`) that adds the
+  line, deducts stock, and logs history "(matched by hand)". Before 2026-10-12 a no-match order was silently dropped.
 - Barcode source of truth: Google Sheet "01 - 000 Baits w/ Barcodes". Shopify SKUs must match it.
 
 ## P&L PDF import (Edge Function `pnl-import`)
@@ -214,3 +218,12 @@ with the code. Update the sections above if architecture changed.
 - **2026-10-10** — Finance "Production" tab renamed **Sales by Product** (it always showed units sold/distributed per
   product type, never production). Now net of partial returns via shared `returnNetter(log)` (also used by
   `calcOrder`), and each card shows "N made this period" from `production_batches` (same cost-profile keying).
+- **2026-10-12** — Shopify #1021 never reached the app: its 3 Paddle Tail variants had no SKU in Shopify, so the webhook
+  dropped the whole order (and silently skipped 1 line on #1022, 3 on #1024). ~60 bait variants (newer colors) had no
+  SKU. Fixes: webhook now always logs + flags unmatched lines; app "Match items" button; backfilled ORD-0069 (#1021) and
+  the missing lines on ORD-0066/0068 (history note "backfilled 2026-10-12"); set 51 Shopify variant SKUs (28 colors,
+  retail + WS) verified against the barcode sheet. Oversold at 0 in app (physically shipped): Paddle Tail Purple
+  Shimmer, Soft Jerk Midnight Silver, Baby Hawg Blackberry — counts need checking.
+  Open: 17 Shopify variants still without SKU where Shopify and app names differ (Neko/Finesse Ringo's Gift
+  Red/Black/Red & Black Flake, Melon Punch Purple / Red & Black Flake, GP Light Black Flake, Midnight Haze Black Flake,
+  Neko GP Red Flake, Stick Baby Bass, Terp Blue Shadow) — waiting on Thomas to confirm names.

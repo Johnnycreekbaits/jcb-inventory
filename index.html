@@ -142,6 +142,71 @@ function dbDelete(t,f){
 function logHistory(prod,before,after,type,who,note,extra){
   return dbPost("history",Object.assign({id:Date.now()+(Math.random()*1000|0),product_id:prod.id,product_name:prod.name,color:prod.color||"",change_type:type,qty_before:before,qty_after:after,changed_by:who,note:note||""},extra||{})).catch(function(e){console.warn("History:",e);});
 }
+// Shopify lines the webhook couldn't match to a product (apparel is expected and not flagged)
+function orderUnmatched(log){
+  try{var d=JSON.parse(log.items||"{}");return(Array.isArray(d)?[]:d.skipped||[]).filter(function(s){return s.reason!=="Printify apparel";});}catch(e){return[];}
+}
+function unmatchedHTML(log){
+  var u=orderUnmatched(log);if(!u.length)return"";
+  return'<div style="margin-top:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:8px 10px;font-size:11px;color:#991b1b;"><div style="font-weight:700;margin-bottom:3px;">&#x26A0;&#xFE0F; '+u.length+' item'+(u.length===1?'':'s')+' not matched &mdash; stock NOT deducted</div>'+u.map(function(s){return'<div>'+escHtml(s.qty+"× "+s.title)+' <span style="color:#dc2626;">('+escHtml(s.reason)+')</span></div>';}).join("")+'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;"><span style="color:#b91c1c;">Also fix the SKU in Shopify so it matches next time.</span><button data-matchun="'+log.id+'" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Match items</button></div></div>';
+}
+// Best guess for a Shopify line like '4" Paddle Tail - Ringo Rainbow': same color, product name words in the title.
+function guessProduct(title){
+  var t=String(title||"").toLowerCase(),i=t.lastIndexOf(" - "),color=i>=0?t.slice(i+3).trim():"";
+  var best=null,bestScore=0;
+  products.forEach(function(p){
+    if(p.series==="Bundles")return;
+    var s=0,pc=String(p.color||"").toLowerCase();
+    if(color&&pc===color)s+=10;else if(color&&pc&&(pc.indexOf(color)>=0||color.indexOf(pc)>=0))s+=3;
+    String(p.name||"").toLowerCase().split(/[^a-z]+/).forEach(function(w){if(w.length>=4&&t.indexOf(w)>=0)s+=2;});
+    if(s>bestScore){bestScore=s;best=p;}
+  });
+  return bestScore>=12?best:null;
+}
+var matchInFlight=false;
+// One capture-phase listener: works on order cards and the order detail modal, and stops the card from opening.
+document.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-matchun]");if(!b)return;e.stopPropagation();e.preventDefault();matchUnmatchedModal(parseInt(b.dataset.matchun));},true);
+function matchUnmatchedModal(id){
+  var log=logs.find(function(l){return l.id===id;});if(!log)return;
+  var un=orderUnmatched(log);if(!un.length)return;
+  var opts=function(sel){return'<option value="">&mdash; Skip this line &mdash;</option>'+products.filter(function(p){return p.series!=="Bundles";}).map(function(p){return'<option value="'+p.id+'"'+(sel&&sel.id===p.id?" selected":"")+'>'+escHtml(p.name+(p.color?" — "+p.color:""))+'</option>';}).join("");};
+  var rows=un.map(function(s,i){
+    var g=guessProduct(s.title),per=s.ws&&g&&!/walker|xg8|glide/i.test(g.name)?6:1;
+    return'<div class="hist-card"><div style="font-weight:700;font-size:13px;margin-bottom:6px;">'+escHtml(s.qty+"× "+s.title)+'</div><select class="field-input" id="mu_p'+i+'">'+opts(g)+'</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;"><label style="font-size:10px;color:#94a3b8;">Bags<input class="field-input" type="number" min="1" id="mu_q'+i+'" value="'+(s.qty*per)+'"/></label><label style="font-size:10px;color:#94a3b8;">$ per bag<input class="field-input" type="number" min="0" step="0.01" id="mu_r'+i+'" value="'+(s.price!=null?(s.price/per).toFixed(2):g?Number(g.price||0).toFixed(2):"0.00")+'"/></label></div></div>';
+  }).join("");
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mMatch"><div class="modal sheet"><div class="modal-header"><div class="modal-title">MATCH ITEMS &middot; '+escHtml(log.name)+'</div><button class="close-btn" id="mMClose">&times;</button></div><div style="font-size:11px;color:#64748b;margin-bottom:12px;">Pick the app product for each Shopify line. Matched lines are added to the order and stock is deducted.</div>'+rows+'<button class="btn-primary" id="btnMatchSave" style="width:100%;padding:13px;font-size:14px;margin-top:6px;">Add to Order &amp; Deduct Stock</button></div></div>');
+  var close=function(){var m=document.getElementById("mMatch");if(m)m.remove();};
+  document.getElementById("mMClose").onclick=close;
+  document.getElementById("mMatch").onclick=function(e){if(e.target===this)close();};
+  document.getElementById("btnMatchSave").onclick=function(){
+    if(matchInFlight)return;
+    var adds=[],keep=[];
+    un.forEach(function(s,i){
+      var p=products.find(function(x){return x.id===parseInt(document.getElementById("mu_p"+i).value);});
+      var q=parseInt(document.getElementById("mu_q"+i).value)||0,pr=Math.round((parseFloat(document.getElementById("mu_r"+i).value)||0)*100)/100;
+      if(p&&q>0)adds.push({p:p,qty:q,price:pr,src:s});else keep.push(s);
+    });
+    if(!adds.length){showToast("Pick a product for at least one line","err");return;}
+    var btn=this;matchInFlight=true;btn.disabled=true;btn.textContent="Saving...";
+    var d;try{d=JSON.parse(log.items||"{}");}catch(e){d={};}if(Array.isArray(d))d={items:d};
+    var items=(d.items||[]).concat(adds.map(function(a){return{pid:a.p.id,name:a.p.name,color:a.p.color||"",qty:a.qty,price:a.price};}));
+    var apparel=(d.skipped||[]).filter(function(s){return s.reason==="Printify apparel";});
+    var totalQty=items.reduce(function(s,i){return s+(i.components?i.components.length*i.qty:i.qty);},0);
+    var totalVal=items.reduce(function(s,i){return s+i.qty*(i.price||0);},0);
+    var newItems=JSON.stringify(Object.assign({},d,{items:items,skipped:apparel.concat(keep)}));
+    if(!apparel.length&&!keep.length)newItems=JSON.stringify(Object.assign({},d,{items:items,skipped:undefined}));
+    dbPatch("logs","id=eq."+log.id,{items:newItems,qty:totalQty,price:totalQty?Math.round(totalVal/totalQty*100)/100:0,pid:log.pid||items[0].pid}).then(function(){
+      var chain=Promise.resolve();
+      adds.forEach(function(a){chain=chain.then(function(){
+        var before=a.p.qty,nq=Math.max(0,before-a.qty);
+        return dbPatch("products","id=eq."+a.p.id,{qty:nq}).then(function(){a.p.qty=nq;return logHistory(a.p,before,nq,"checkout",currentUser,"Order for "+(log.person||"customer")+" via "+(log.ch||"")+" - "+(log.project||log.name)+" (matched by hand)");});
+      });});
+      return chain;
+    }).then(function(){close();var m=document.getElementById("mLogDetail");if(m)m.remove();showToast("Matched "+adds.length+" line"+(adds.length===1?"":"s"));return doRefresh();})
+      .catch(function(e){showToast("Error: "+e.message,"err");btn.disabled=false;btn.textContent="Add to Order & Deduct Stock";})
+      .then(function(){matchInFlight=false;});
+  };
+}
 function parseOrderItems(itemsStr){
   try{if(!itemsStr)return{items:[],state:""};var d=JSON.parse(itemsStr);if(Array.isArray(d))return{items:d,state:""};return{items:d.items||[],state:d.state||""};}catch(e){return{items:[],state:""};}
 }
@@ -635,6 +700,7 @@ function coHTML(){
       itemsData.map(function(item){return'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;"><div style="display:flex;align-items:center;gap:5px;">'+dotHtml(item.color||"")+'<span>'+item.name+(item.color?" &mdash; "+item.color:"")+'</span></div><div style="font-weight:700;color:#ea580c;">&times;'+item.qty+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">$'+(item.qty*(item.price||0)).toFixed(2)+'</span></div></div>';}).join("")+
       '</div>';
     }
+    itemsHTML+=unmatchedHTML(l);
     return'<div class="log-card '+(l.st==="Out"?"out":"returned")+'" data-logid="'+l.id+'" style="cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-weight:700;font-size:14px;">'+l.name+'</span>'+'<span style="background:'+(l.st==="Out"?"#eff6ff":"#dcfce7")+';color:'+(l.st==="Out"?"#2563eb":"#16a34a")+';padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">'+(l.st==="Out"?"OUT":"BACK")+'</span></div><div style="font-size:11px;color:#64748b;margin-top:3px;">'+(l.ch?'<span style="margin-right:10px;">&#x1F3EA; '+l.ch+"</span>":"")+(l.person?'<span style="margin-right:10px;">&#x1F464; '+l.person+"</span>":"")+(l.project?'<span style="margin-right:10px;">&#x1F4CB; '+l.project+"</span>":"")+(ordState?'<span>&#x1F4CD; '+ordState+"</span>":"")+'</div></div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;margin-left:8px;">&times;'+l.qty+'</div></div><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-size:10px;color:#94a3b8;">'+l.date+(l.ret?'<span style="color:#16a34a;"> &rarr; back '+l.ret+"</span>":'<span style="color:'+(days>7?"#dc2626":"#94a3b8")+'"> &middot; '+days+"d out"+(days>7?" &#x26A0;&#xFE0F;":"")+"</span>")+(l.price>0?" &middot; $"+(l.qty*l.price).toFixed(2):"")+"</div>"+'<div style="display:flex;gap:6px;">'+(l.st==="Out"?(function(){var rd=returnedForLog(l.id),n=Object.keys(rd).reduce(function(s,k){return s+rd[k];},0);return n?'<span class="hist-badge" style="background:#dcfce7;color:#16a34a;align-self:center;">'+n+' returned</span>':'';})()+'<button class="return-btn" data-ret="'+l.id+'">&#x21A9; Return</button>':'')+'<button style="background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;" data-editorder="'+l.id+'">&#x270F;&#xFE0F; Edit</button></div>'+"</div>"+itemsHTML+"</div>";
   }).join("");
   return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><div><div class="section-title">CHECKOUT</div><div class="section-sub">'+logs.filter(function(l){return l.st==="Out";}).length+' units currently out</div></div><button class="btn-primary" id="btnCO2">&#x1F3A3; New Order</button></div>'+cartSection+'<div class="filter-bar">'+["All","Out","Returned","Paid","Unpaid"].map(function(f){return'<button class="filter-btn'+(logFilter===f?" active":"")+'" data-logf="'+f+'">'+f+"</button>";}).join("")+"</div>"+logCards;
@@ -1083,6 +1149,7 @@ function logDetailModal(id){
   var paidBadge=log.paid?'<span style="background:#dcfce7;color:#16a34a;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">PAID '+log.paid+'</span>':'';
   var unpaidBadge=(isPaidChannel&&!log.paid&&log.st==="Out")?'<span style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">UNPAID</span>':'';
   var itemsHTML=itemsData.length>0?itemsData.map(function(item){return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;"><div style="display:flex;align-items:center;gap:6px;">'+dotHtml(item.color||"")+'<div><div style="font-weight:600;font-size:13px;">'+item.name+(item.color?" &mdash; "+item.color:"")+'</div><div style="font-size:11px;color:#94a3b8;">$'+(item.price||0).toFixed(2)+' each</div></div></div><div style="font-family:\'Bebas Neue\',cursive;font-size:20px;color:#ea580c;">&times;'+item.qty+'</div></div>';}).join(""):'<div style="font-size:13px;color:#64748b;">No item detail (legacy order)</div>';
+  itemsHTML+=unmatchedHTML(log);
   var shipVal=function(v){return v===null||v===undefined?"":Number(v).toFixed(2);};
   var shipNet=(log.ship_paid!=null||log.ship_cost!=null)?(Number(log.ship_paid||0)-Number(log.ship_cost||0)):null;
   var shipHTML='<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin:16px 0 8px;">Shipping</div>'

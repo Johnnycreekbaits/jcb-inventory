@@ -64,7 +64,11 @@ Deno.serve(async (req) => {
       (ignore ? ` | LIVE WOULD IGNORE: ${ignore}` : ""));
     return json({ dry: true, label, person, ...plan });
   }
-  if (!plan.items.length) return json({ ok: true, label, note: "no inventory items", skipped: plan.skipped });
+  // Apparel-only orders aren't inventory. Anything else is always logged — unmatched bait lines stay in
+  // items.skipped and the app flags the order "not matched" instead of the order silently disappearing.
+  const needsReview = plan.skipped.filter((s) => s.reason !== "Printify apparel");
+  if (!plan.items.length && !needsReview.length) return json({ ok: true, label, note: "no inventory items", skipped: plan.skipped });
+  if (needsReview.length) console.warn(label, "NOT MATCHED:", needsReview.map((s) => `${s.qty}x ${s.title} (${s.reason})`).join("; "));
 
   // Order number, same rule as confirmOrder(): next after the newest ORD-####.
   const recent: { name: string }[] = await db("logs?select=name&order=name.desc&limit=50");
@@ -78,7 +82,7 @@ Deno.serve(async (req) => {
     await db("logs", {
       method: "POST", headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
-        id: order.id, name: orderLabel, color: "", pid: plan.items[0].pid, qty: plan.totalQty,
+        id: order.id, name: orderLabel, color: "", pid: plan.items[0]?.pid ?? 0, qty: plan.totalQty,
         price: plan.totalQty > 0 ? Math.round((plan.totalVal / plan.totalQty) * 100) / 100 : 0, ch: plan.channel, person, project: label,
         date: String(order.created_at || new Date().toISOString()).slice(0, 10),
         items: JSON.stringify({ state, items: plan.items, ...(plan.skipped.length ? { skipped: plan.skipped } : {}) }),

@@ -47,6 +47,10 @@ check("no deduction on 1201", vp.deductions.every((d) => d.pid !== 1201) && vp.d
 check("totalQty counts 7 bags", vp.totalQty === 7, vp.totalQty);
 console.log("    picked:", comps.map((c) => `${c.name} ${c.color}`).join(", "));
 
+// No-SKU line is kept as skipped with its paid price, so the app can match it by hand.
+const nosku = planOrder({ line_items: [{ sku: null, title: '4" Paddle Tail', name: '4" Paddle Tail - Ringo Rainbow', quantity: 2, price: "6.99" }] }, products);
+check("no-SKU line skipped with price", nosku.items.length === 0 && nosku.skipped[0]?.reason === "no SKU" && nosku.skipped[0]?.price === 6.99 && nosku.skipped[0]?.qty === 2, nosku.skipped);
+
 check("ship paid 7.00", planOrder({ line_items: [], shipping_lines: [{ price: "7.00", discounted_price: "7.00" }] }, products).shipPaid === 7);
 check("free-ship code -> 0", planOrder({ line_items: [], shipping_lines: [{ price: "7.00", discounted_price: "0.00" }] }, products).shipPaid === 0);
 check("customer name fallback", customerName({ shipping_address: { name: "Ship Name" } }) === "Ship Name");
