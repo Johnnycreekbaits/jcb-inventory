@@ -87,23 +87,23 @@ function dbPatch(t,f,b){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"PATCH",
 function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
 
 var DEFAULT_COSTS=[
-  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:1.04},
-  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:1.04},
-  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:1.04},
-  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:1.04},
-  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:1.04},
-  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:1.04},
-  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.04},
-  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:1.04},
+  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.68},
+  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.68},
+  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.68},
+  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.68},
+  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:0.68},
+  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.68},
+  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:0.68},
+  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.68},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.04},
-  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:7.28},
+  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:4.76},
   {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
   {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
   {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
   {id:"jc-walker",name:"JC Walker",series:"JC Walker",unit:"bait",cogs:6.31},
   {id:"xg8-glide",name:"XG8 Glide",series:"Glidebait",unit:"bait",cogs:44.25}
 ];
-var COGS_CORRECTIONS={"variety-pack":7.28};
+var COGS_CORRECTIONS={}; // one-off fixes to cached local profiles (Supabase cost_profiles is the source of truth)
 function loadCostsLocal(){
   var s=localStorage.getItem("jcb_costs");var saved=null;
   if(s){try{saved=JSON.parse(s);}catch(e){}}

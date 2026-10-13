@@ -242,4 +242,8 @@ with the code. Update the sections above if architecture changed.
   baits-per-bag remembered. Order card/detail/invoice show bag size + PO; Edit Order edits $/bag + baits; returns from
   Custom orders never restock. Finance: COGS scaled by bait count, Custom in AR, custom bags on the intercompany PO.
   Tested 27/27 in headless Chromium against live Supabase (test order removed, stock untouched).
-  Bag cost $0.16 + $0.08/bait (Thomas). Costs tab says $0.84/bag for soft plastics vs $0.80 from those numbers — ask.
+  Bag cost $0.16 (Thomas).
+- **2026-10-13** — Reviewed Drive sheet "JCB BOMs" vs the finance Costs tab (Thomas chose the sheet's current numbers).
+  Soft plastic cost profiles (8 series) $0.84 → **$0.68**/bag, Variety Pack $7.28 → $4.76 (7 × $0.68), updated in Supabase
+  `cost_profiles` + `DEFAULT_COSTS`; removed the stale `COGS_CORRECTIONS` 7.28 override. Walker $6.31 and Glide $44.25 kept.
+  Note: cost profiles have no effective dates, so all past months' COGS restate at the new cost.
