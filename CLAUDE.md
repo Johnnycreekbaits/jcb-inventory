@@ -105,7 +105,13 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   on the Transfers tab, for entered_by / updated_by.
 
 ## Channels & Pricing (index.html)
-`["DTC","Dealer","Distro","Pro Staff","Sponsorship/Promo","Internal"]`
+`["DTC","Dealer","Distro","Custom","Pro Staff","Sponsorship/Promo","Internal"]`
+- **Custom** (made-to-order deals, e.g. Mystery Tackle Box): price per bag + baits per bag typed per line (or "all lines"),
+  "Their PO #" stored in `logs.project`. Lines are `{pid,name,color,qty,price,baits,custom:true}`. Bagged straight from
+  production → shelf stock is never checked, deducted, edited or restocked (returns are recorded only). Edit Order keeps
+  Custom locked (and other orders can't switch to it). Invoices like Dealer/Distro (Net 30, AR, Mark as Paid).
+  Finance: COGS per bag = `BAG_COST` ($0.20) + (cost profile − bag) × baits / pack (`bagCOGS`); Transfers PO adds
+  custom-order bags as their own lines ("N-bait bag, custom order") via `linesFromCustom`.
 - Sponsorship/Promo, Internal, Sample/Promo → $0 revenue
 - JC Walker: Dealer/Distro → $10.99
 - Soft plastics (pack≥8, price≤$7.50): Dealer $3.50, Distro $2.80, Pro Staff $5.00
@@ -231,3 +237,9 @@ with the code. Update the sections above if architecture changed.
   Blue Shad. Stick Bait Baby Bass: app color renamed "Baby Bass White & Melon" → "Baby Bass" (product 2034) to match
   Shopify; Shopify retail + WS SKU set to 850070815116. Google Sheet keeps its longer name on purpose. Every bait variant
   in Shopify now has a SKU.
+- **2026-10-13** — **Custom channel** for Mystery Tackle Box-style orders (their price per bag, variable baits per bag, their
+  PO #, made to order so no stock moves). Checkout "Start a Custom order" button + product picker, set-all price/baits,
+  baits-per-bag remembered. Order card/detail/invoice show bag size + PO; Edit Order edits $/bag + baits; returns from
+  Custom orders never restock. Finance: COGS scaled by bait count, Custom in AR, custom bags on the intercompany PO.
+  Tested 27/27 in headless Chromium against live Supabase (test order removed, stock untouched).
+  Open: confirm the $0.20 bag-cost split (cost profiles now say $0.84/bag for soft plastics).

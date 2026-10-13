@@ -159,17 +159,26 @@ function matchCostProfile(prod){
   });
   return match||null;
 }
-function getItemCOGS(qty,prod){var cp=matchCostProfile(prod);return cp?cp.cogs*qty:0;}
+// Custom-order bags (items[].baits) hold a different bait count than the product's pack: the bag itself is a fixed
+// cost, the rest of a bag's COGS scales with the number of baits in it.
+var BAG_COST=0.20;
+function bagCOGS(cp,prod,baits){
+  var c=Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
+  if(!baits||!pack||baits===pack||cp.unit!=="bag")return c;
+  var bag=Math.min(BAG_COST,c);return bag+(c-bag)*baits/pack;
+}
+function getItemCOGS(qty,prod,baits){var cp=matchCostProfile(prod);return cp?bagCOGS(cp,prod,baits)*qty:0;}
+function isInvoiceCh(ch){return ch==="Dealer"||ch==="Distro"||ch==="Custom";}
 function calcInventoryValue(){var total=0;products.forEach(function(p){if(p.series==="Bundles")return;var cp=matchCostProfile(p);if(cp)total+=p.qty*cp.cogs;});return total;}
 function calcAccountsReceivable(){
   var total=0,count=0;
-  logs.filter(function(l){return(l.ch==="Dealer"||l.ch==="Distro")&&l.st==="Out"&&!l.paid;}).forEach(function(l){
+  logs.filter(function(l){return isInvoiceCh(l.ch)&&l.st==="Out"&&!l.paid;}).forEach(function(l){
     total+=calcOrder(l,products).rev;count++;
   });
   return{total:total,count:count};
 }
 function showARModal(){
-  var unpaid=logs.filter(function(l){return(l.ch==="Dealer"||l.ch==="Distro")&&l.st==="Out"&&!l.paid;});
+  var unpaid=logs.filter(function(l){return isInvoiceCh(l.ch)&&l.st==="Out"&&!l.paid;});
   unpaid.sort(function(a,b){return a.date<b.date?-1:1;});
   var rows=unpaid.map(function(l){
     var amt=calcOrder(l,products).rev;
@@ -200,7 +209,7 @@ function calcOrder(log,prods){
       var p=prods.find(function(x){return x.id===item.pid;});
       var q=net(item.pid,item.qty);
       rev+=q*(item.price||0);
-      cogs+=getItemCOGS(q,p);
+      cogs+=getItemCOGS(q,p,item.baits);
     });
   }else{
     var p=prods.find(function(x){return x.id===log.pid;});
@@ -372,13 +381,13 @@ function prodHTML(){
     var net=returnNetter(l);
     if(items.length>0){
       items.forEach(function(raw){
-        var item={pid:raw.pid,price:raw.price,qty:net(raw.pid,raw.qty)};if(!item.qty)return;
+        var item={pid:raw.pid,price:raw.price,baits:raw.baits,qty:net(raw.pid,raw.qty)};if(!item.qty)return;
         var p=products.find(function(x){return x.id===item.pid;});
         var cp=matchCostProfile(p||null);
         var key=cp?cp.id:(p?p.name:"unknown");
         if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:"Unknown"),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
         byType[key].qty+=item.qty;
-        byType[key].cogs+=getItemCOGS(item.qty,p||null);
+        byType[key].cogs+=getItemCOGS(item.qty,p||null,item.baits);
         byType[key].rev+=item.qty*(item.price||0);
         if(!byType[key].channels[ch])byType[key].channels[ch]=0;
         byType[key].channels[ch]+=item.qty;
@@ -501,7 +510,7 @@ function reportHTML(){
         byProduct[key].units+=item.qty;
         if(isSponsor)byProduct[key].sponsorUnits+=item.qty;
         byProduct[key].rev+=item.qty*(item.price||0);
-        byProduct[key].cogs+=getItemCOGS(item.qty,p);
+        byProduct[key].cogs+=getItemCOGS(item.qty,p,item.baits);
       });
     }else{
       var p=products.find(function(x){return x.id===l.pid;});
@@ -740,11 +749,22 @@ function trBatchModal(id){
 // ── Purchase orders ──
 function lastPO(){return pos.slice().sort(function(a,b){return String(b.created_at).localeCompare(String(a.created_at));})[0]||null;}
 function nextPONumber(){var mx=0;pos.forEach(function(p){var m=String(p.po_number||"").match(/(\d+)\s*$/);if(m)mx=Math.max(mx,parseInt(m[1]));});return"TPO-"+String(mx+1).padStart(4,"0");}
-function unitCostFor(pid){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);return cp?Number(cp.cogs):null;}
+function unitCostFor(pid,baits){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);return cp?round2(bagCOGS(cp,p,baits)):null;}
 function priceAt(cost,markup){return cost==null?0:round2(cost*(1+(Number(markup)||0)/100));}
-function makeLine(pid,qty,markup){
-  var p=products.find(function(x){return x.id===pid;})||{};var cost=unitCostFor(pid);
-  return{pid:pid,name:p.name||"",color:p.color||"",series:p.series||"",qty:qty,cost:cost,price:priceAt(cost,markup)};
+function makeLine(pid,qty,markup,baits){
+  var p=products.find(function(x){return x.id===pid;})||{};var cost=unitCostFor(pid,baits);
+  var l={pid:pid,name:(p.name||"")+(baits?" ("+baits+"-bait bag, custom order)":""),color:p.color||"",series:p.series||"",qty:qty,cost:cost,price:priceAt(cost,markup)};
+  if(baits){l.baits=baits;l.custom=true;}
+  return l;
+}
+// Custom orders are bagged straight from production (never received into stock), so they go on the PO from the orders
+function linesFromCustom(start,end,markup){
+  var m={};
+  logs.forEach(function(l){
+    if(l.ch!=="Custom"||!l.date||l.date<start||l.date>end)return;
+    parseItems(l.items).forEach(function(i){if(!i.baits)return;var k=i.pid+"|"+i.baits;if(!m[k])m[k]={pid:i.pid,baits:i.baits,qty:0};m[k].qty+=i.qty;});
+  });
+  return Object.keys(m).map(function(k){return makeLine(m[k].pid,m[k].qty,markup,m[k].baits);}).sort(function(a,b){return(a.name+a.color).localeCompare(b.name+b.color);});
 }
 function linesFromReceived(rec,markup){
   return Object.keys(rec).map(function(k){var pid=parseInt(k);var p=products.find(function(x){return x.id===pid;});if(trSkip(p)||rec[k].qty<=0)return null;return makeLine(pid,rec[k].qty,markup);})
@@ -759,7 +779,7 @@ function newPO(){
   fetchHist(r.start,r.end).then(function(hist){
     poDraft={id:null,po_number:nextPONumber(),po_date:localDateStr(new Date()),period_start:r.start,period_end:r.end,status:"Draft",markup_pct:mk,
       vendor_name:lp?lp.vendor_name:"JCB Manufacturing",vendor_address:lp?lp.vendor_address:"",buyer_name:lp?lp.buyer_name:"Johnny Creek Baits, LLC",buyer_address:lp?lp.buyer_address:"",
-      terms:"Net 30",notes:PO_DEFAULT_NOTE,paid_date:null,lines:linesFromReceived(receivedByProduct(hist),mk)};
+      terms:"Net 30",notes:PO_DEFAULT_NOTE,paid_date:null,lines:linesFromReceived(receivedByProduct(hist),mk).concat(linesFromCustom(r.start,r.end,mk))};
     openPOEditor();
   }).catch(function(e){showToast("Error: "+e.message,"err");});
 }
@@ -824,7 +844,7 @@ function wirePOEditor(){
   };
   document.getElementById("poReprice").onclick=function(){
     var n=0,skipped=0;
-    d.lines.forEach(function(l){var c=l.pid!=null?unitCostFor(l.pid):null;if(c==null){skipped++;return;}l.cost=c;l.price=priceAt(c,d.markup_pct);n++;});
+    d.lines.forEach(function(l){var c=l.pid!=null?unitCostFor(l.pid,l.baits):null;if(c==null){skipped++;return;}l.cost=c;l.price=priceAt(c,d.markup_pct);n++;});
     renderPOEditor();showToast("Re-priced "+n+" lines at "+d.markup_pct+"%"+(skipped?" ("+skipped+" without cost left as-is)":""));
   };
   document.getElementById("poRefresh").onclick=function(){
@@ -833,8 +853,10 @@ function wirePOEditor(){
     fetchHist(d.period_start,d.period_end).then(function(hist){
       if(poDraft!==d)return;
       var rec=receivedByProduct(hist),changed=0,added=0;
-      d.lines.forEach(function(l){var q=rec[l.pid]?Math.max(0,rec[l.pid].qty):0;if(l.qty!==q){l.qty=q;changed++;}});
-      linesFromReceived(rec,d.markup_pct).forEach(function(nl){if(!d.lines.some(function(l){return l.pid===nl.pid;})){d.lines.push(nl);added++;}});
+      var cust={};linesFromCustom(d.period_start,d.period_end,d.markup_pct).forEach(function(nl){cust[nl.pid+"|"+nl.baits]=nl;});
+      d.lines.forEach(function(l){var q=l.custom?(cust[l.pid+"|"+l.baits]?cust[l.pid+"|"+l.baits].qty:0):(rec[l.pid]?Math.max(0,rec[l.pid].qty):0);if(l.qty!==q){l.qty=q;changed++;}});
+      linesFromReceived(rec,d.markup_pct).forEach(function(nl){if(!d.lines.some(function(l){return !l.custom&&l.pid===nl.pid;})){d.lines.push(nl);added++;}});
+      Object.keys(cust).forEach(function(k){var nl=cust[k];if(!d.lines.some(function(l){return l.custom&&l.pid===nl.pid&&l.baits===nl.baits;})){d.lines.push(nl);added++;}});
       renderPOEditor();showToast("Qty refreshed: "+changed+" changed, "+added+" added");
     }).catch(function(e){showToast("Error: "+e.message,"err");btn.disabled=false;btn.textContent="Refresh qty from inventory";});
   };
