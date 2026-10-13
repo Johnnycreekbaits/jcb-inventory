@@ -263,3 +263,5 @@ with the code. Update the sections above if architecture changed.
   "First sale" field, P&L/Report excise line, excise payments no longer in operating expenses (May 2026 had $790), PO priced at
   first sale + excise owed, Transfers quarterly excise card. Tested 12/12 in-page (no DB writes). Open: first-sale prices for
   Glide, Walker, Kanji Ball, Swim Bait (no excise counted until set).
+- **2026-10-13** — First-sale prices at the soft-plastic ratio ($1.10 / $0.67 = 1.642×, Thomas): JC Walker $10.36, XG8 Glide $71.01,
+  Kanji Ball $2.46 (cost $1.50 has no BOM). Glide cost $44.25 → $43.25 (sheet: paint & clear coat now $1.00). Swim Bait not set yet.
