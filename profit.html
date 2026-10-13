@@ -161,7 +161,7 @@ function matchCostProfile(prod){
 }
 // Custom-order bags (items[].baits) hold a different bait count than the product's pack: the bag itself is a fixed
 // cost, the rest of a bag's COGS scales with the number of baits in it.
-var BAG_COST=0.20;
+var BAG_COST=0.16;
 function bagCOGS(cp,prod,baits){
   var c=Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
   if(!baits||!pack||baits===pack||cp.unit!=="bag")return c;

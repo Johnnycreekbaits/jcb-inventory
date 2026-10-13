@@ -110,7 +110,7 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   "Their PO #" stored in `logs.project`. Lines are `{pid,name,color,qty,price,baits,custom:true}`. Bagged straight from
   production → shelf stock is never checked, deducted, edited or restocked (returns are recorded only). Edit Order keeps
   Custom locked (and other orders can't switch to it). Invoices like Dealer/Distro (Net 30, AR, Mark as Paid).
-  Finance: COGS per bag = `BAG_COST` ($0.20) + (cost profile − bag) × baits / pack (`bagCOGS`); Transfers PO adds
+  Finance: COGS per bag = `BAG_COST` ($0.16, Thomas 2026-10-13) + (cost profile − bag) × baits / pack (`bagCOGS`); Transfers PO adds
   custom-order bags as their own lines ("N-bait bag, custom order") via `linesFromCustom`.
 - Sponsorship/Promo, Internal, Sample/Promo → $0 revenue
 - JC Walker: Dealer/Distro → $10.99
@@ -242,4 +242,4 @@ with the code. Update the sections above if architecture changed.
   baits-per-bag remembered. Order card/detail/invoice show bag size + PO; Edit Order edits $/bag + baits; returns from
   Custom orders never restock. Finance: COGS scaled by bait count, Custom in AR, custom bags on the intercompany PO.
   Tested 27/27 in headless Chromium against live Supabase (test order removed, stock untouched).
-  Open: confirm the $0.20 bag-cost split (cost profiles now say $0.84/bag for soft plastics).
+  Bag cost $0.16 + $0.08/bait (Thomas). Costs tab says $0.84/bag for soft plastics vs $0.80 from those numbers — ask.
