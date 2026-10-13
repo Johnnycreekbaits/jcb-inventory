@@ -87,16 +87,16 @@ function dbPatch(t,f,b){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"PATCH",
 function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
 
 var DEFAULT_COSTS=[
-  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.68},
-  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.68},
-  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.68},
-  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.68},
-  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:0.68},
-  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.68},
-  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:0.68},
-  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.68},
+  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.67,first_sale:1.10},
+  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.67,first_sale:1.10},
+  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.67,first_sale:1.10},
+  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.67,first_sale:1.10},
+  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:0.67,first_sale:1.10},
+  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.67,first_sale:1.10},
+  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:0.67,first_sale:1.10},
+  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.67,first_sale:1.10},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.04},
-  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:4.76},
+  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:4.69,first_sale:7.70},
   {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
   {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
   {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
@@ -129,7 +129,7 @@ function mergeMissingDefaults(profiles){
 }
 function saveCosts(){
   localStorage.setItem("jcb_costs",JSON.stringify(costProfiles));
-  dbPost("cost_profiles",costProfiles).catch(function(e){console.warn("Cost profile sync:",e);});
+  dbPost("cost_profiles",costProfiles.map(function(c){return{id:c.id,name:c.name,series:c.series||null,unit:c.unit,cogs:c.cogs,first_sale:hasFirstSale(c)?Number(c.first_sale):null};})).catch(function(e){console.warn("Cost profile sync:",e);showToast("Cost sync failed: "+e.message,"err");});
 }
 function deleteCostFromDB(id){dbDelete("cost_profiles","id=eq."+id).catch(function(){});}
 var EXP_CATS=["Advertising","Auto and Truck Expense","Dues and Subscriptions","Employee Meals","Federal Excise Tax","Fuel Expense","Interest Expense","Legal and Accounting","Office Expense","Other Taxes, Fees & Licenses","Outside Services","Payroll","Penalties","Rent","Repairs and Maintenance","Shop Expense","Supplies and Small Tools","Training Expense","Travel Expense","Utilities Expense"];
@@ -161,13 +161,25 @@ function matchCostProfile(prod){
 }
 // Custom-order bags (items[].baits) hold a different bait count than the product's pack: the bag itself is a fixed
 // cost, the rest of a bag's COGS scales with the number of baits in it.
-var BAG_COST=0.16;
+var BAG_COST=0.20; // average bag cost on the BOM sheet (old bags $0.24, new $0.16)
 function bagCOGS(cp,prod,baits){
   var c=Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
   if(!baits||!pack||baits===pack||cp.unit!=="bag")return c;
   var bag=Math.min(BAG_COST,c);return bag+(c-bag)*baits/pack;
 }
-function getItemCOGS(qty,prod,baits){var cp=matchCostProfile(prod);return cp?bagCOGS(cp,prod,baits)*qty:0;}
+// Federal excise on lures: 10% of the FIRST sale (JCB Manufacturing → Johnny Creek Baits, LLC). cost_profiles.first_sale
+// = that transfer price per unit (soft plastics $1.10/bag). Custom-size bags prorate by bait count. Not set → no excise.
+var EXCISE_RATE=0.10,EXCISE_CAT="Federal Excise Tax",NO_EXCISE_SERIES=["Apparel"];
+function hasFirstSale(cp){return !!cp&&cp.first_sale!=null&&cp.first_sale!==""&&!isNaN(Number(cp.first_sale));}
+function firstSalePrice(cp,prod,baits){
+  if(!hasFirstSale(cp)||NO_EXCISE_SERIES.indexOf(cp.series)>=0)return 0;
+  var fs=Number(cp.first_sale),pack=prod&&prod.pack>1?prod.pack:0;
+  if(baits&&pack&&baits!==pack&&cp.unit==="bag")fs=fs*baits/pack;
+  return fs;
+}
+function getItemExcise(qty,prod,baits){var cp=matchCostProfile(prod);return cp?EXCISE_RATE*firstSalePrice(cp,prod,baits)*qty:0;}
+// COGS = production cost (BOM, no excise) + excise, so every margin includes the tax
+function getItemCOGS(qty,prod,baits){var cp=matchCostProfile(prod);return cp?bagCOGS(cp,prod,baits)*qty+getItemExcise(qty,prod,baits):0;}
 function isInvoiceCh(ch){return ch==="Dealer"||ch==="Distro"||ch==="Custom";}
 function calcInventoryValue(){var total=0;products.forEach(function(p){if(p.series==="Bundles")return;var cp=matchCostProfile(p);if(cp)total+=p.qty*cp.cogs;});return total;}
 function calcAccountsReceivable(){
@@ -202,7 +214,7 @@ function returnNetter(log){
 }
 function calcOrder(log,prods){
   var items=parseItems(log.items);
-  var rev=0,cogs=0;
+  var rev=0,cogs=0,excise=0;
   var net=returnNetter(log);
   if(items.length>0){
     items.forEach(function(item){
@@ -210,14 +222,16 @@ function calcOrder(log,prods){
       var q=net(item.pid,item.qty);
       rev+=q*(item.price||0);
       cogs+=getItemCOGS(q,p,item.baits);
+      excise+=getItemExcise(q,p,item.baits);
     });
   }else{
     var p=prods.find(function(x){return x.id===log.pid;});
     var q=net(log.pid,log.qty);
     rev+=q*getChannelPrice(p||{price:log.price||0,pack:8},log.ch||"Retail");
     cogs+=getItemCOGS(q,p);
+    excise+=getItemExcise(q,p);
   }
-  return{rev:rev,cogs:cogs};
+  return{rev:rev,cogs:cogs,excise:excise};
 }
 
 async function hashPw(pw){
@@ -252,14 +266,17 @@ function getPeriodMonths(){
 }
 function localDateStr(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function getPeriodLogs(){var r=getPeriodRange();var s=localDateStr(r.start),e=localDateStr(r.end);return logs.filter(function(l){return l.date>=s&&l.date<=e&&l.st!=="Returned";});}
-function getPeriodExpenses(){if(!expReady)return[];var ms=getPeriodMonths();return expenses.filter(function(e){return ms.indexOf(e.month)>=0;});}
+// Excise payments (category EXCISE_CAT) are left out of operating expenses: the tax is already in COGS. See Transfers → Excise.
+function getPeriodExpenses(){if(!expReady)return[];var ms=getPeriodMonths();return expenses.filter(function(e){return ms.indexOf(e.month)>=0&&e.category!==EXCISE_CAT;});}
+function excisePaidNote(){if(!expReady)return"";var ms=getPeriodMonths(),t=0;expenses.forEach(function(e){if(e.category===EXCISE_CAT&&ms.indexOf(e.month)>=0)t+=Number(e.amount);});
+  return t>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Excise payments entered as expenses ('+fmt$(t)+') are not counted again &mdash; excise is in COGS</span></div>':"";}
 
 function calcSummary(fl,fe){
-  var rev=0,cogs=0,expTotal=0;
-  fl.forEach(function(l){var o=calcOrder(l,products);rev+=o.rev;cogs+=o.cogs;});
+  var rev=0,cogs=0,excise=0,expTotal=0;
+  fl.forEach(function(l){var o=calcOrder(l,products);rev+=o.rev;cogs+=o.cogs;excise+=o.excise;});
   fe.forEach(function(e){expTotal+=Number(e.amount);});
   var gross=rev-cogs,net=gross-expTotal;
-  return{rev:rev,cogs:cogs,gross:gross,grossPct:rev>0?(gross/rev)*100:0,expenses:expTotal,net:net,netPct:rev>0?(net/rev)*100:0,orders:fl.length};
+  return{rev:rev,cogs:cogs,excise:excise,gross:gross,grossPct:rev>0?(gross/rev)*100:0,expenses:expTotal,net:net,netPct:rev>0?(net/rev)*100:0,orders:fl.length};
 }
 
 function periodLabel(){
@@ -443,9 +460,9 @@ function plHTML(){
   var netBg=s.net>=0?"#eff6ff":"#fef2f2";
   var netBorder=s.net>=0?"#bfdbfe":"#fecaca";
   var noExpNote=!expReady?'<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:6px 0;">Expenses table not set up — see Expenses tab</div>':fe.length===0?'<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:6px 0;">No expenses entered for this period</div>':"";
-  var sponsorCogs=0;fl.forEach(function(l){if(l.ch==="Sponsorship/Promo")sponsorCogs+=calcOrder(l,products).cogs;});
-  var paidCogs=s.cogs-sponsorCogs;
-  var cogsRows=(paidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(paidCogs)+'</span></div>':'')+(sponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship Cost</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(sponsorCogs)+'</span></div>':'');
+  var sponsorCogs=0;fl.forEach(function(l){if(l.ch==="Sponsorship/Promo"){var o=calcOrder(l,products);sponsorCogs+=o.cogs-o.excise;}});
+  var paidCogs=s.cogs-s.excise-sponsorCogs;
+  var cogsRows=(paidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(paidCogs)+'</span></div>':'')+(sponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship Cost</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(sponsorCogs)+'</span></div>':'')+(s.excise>0?'<div class="pl-row"><span style="color:#475569;">Federal Excise Tax <span style="font-size:10px;color:#94a3b8;">10% of first sale</span></span><span style="font-weight:600;color:#dc2626;">-'+fmt$(s.excise)+'</span></div>':'')+excisePaidNote();
   return periodBarHTML()+'<div class="section-title">PROFIT & LOSS</div><div class="section-sub">'+periodLabel()+'</div><div class="card"><div class="pl-section-hd">Revenue</div>'+revRows+'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div><div class="pl-section-hd">Cost of Goods Sold</div>'+cogsRows+'<div class="pl-total-row"><span>Total COGS</span><span style="color:#dc2626;">-'+fmt$(s.cogs)+'</span></div><div class="profit-box" style="background:'+grossBg+';border:1px solid '+grossBorder+';"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;color:'+grossColor+';">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:'+grossColor+';">'+fmt$(s.gross)+'</span></div><div style="font-size:11px;color:'+grossColor+';margin-top:3px;">'+fmtPct(s.grossPct)+' gross margin</div></div><div class="pl-section-hd">Operating Expenses</div>'+noExpNote+expRows+(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span style="color:#dc2626;">-'+fmt$(s.expenses)+'</span></div>':"")+'<div class="profit-box" style="background:'+netBg+';border:1px solid '+netBorder+';margin-bottom:0;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:30px;color:'+netColor+';">'+fmt$(s.net)+'</span></div><div style="font-size:11px;color:'+netColor+';margin-top:3px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div></div></div>';
 }
 
@@ -466,9 +483,10 @@ function expHTML(){
 
 function costsHTML(){
   var rows=costProfiles.map(function(cp,i){
-    return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">'+cp.name+'</div><div style="font-size:10px;color:#94a3b8;margin-top:1px;">per '+cp.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;"><span style="color:#94a3b8;font-weight:600;font-size:13px;">$</span><input type="number" step="0.01" min="0" value="'+cp.cogs.toFixed(2)+'" data-cpidx="'+i+'" class="cp-inp" style="width:84px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#1e293b;font-family:\'DM Sans\',sans-serif;outline:none;"/><button class="del-btn" data-delcp="'+i+'">&#x2715;</button></div></div>';
+    return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">'+cp.name+'</div><div style="font-size:10px;color:#94a3b8;margin-top:1px;">per '+cp.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;"><span style="color:#94a3b8;font-weight:600;font-size:13px;">$</span><input type="number" step="0.01" min="0" value="'+cp.cogs.toFixed(2)+'" data-cpidx="'+i+'" class="cp-inp" style="width:84px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#1e293b;font-family:\'DM Sans\',sans-serif;outline:none;"/><button class="del-btn" data-delcp="'+i+'">&#x2715;</button></div></div>'
+      +(NO_EXCISE_SERIES.indexOf(cp.series)>=0?'':'<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:-4px 0 8px;font-size:10px;color:#94a3b8;">First sale to LLC (excise base) $<input type="number" step="0.01" min="0" value="'+(hasFirstSale(cp)?Number(cp.first_sale).toFixed(2):"")+'" placeholder="not set" data-fsidx="'+i+'" class="fs-inp" style="width:70px;background:#f8fafc;border:1px solid '+(hasFirstSale(cp)?"#e2e8f0":"#fca5a5")+';border-radius:8px;padding:4px 6px;font-size:12px;font-weight:700;text-align:right;"/>'+(hasFirstSale(cp)?' <span style="color:#7c3aed;font-weight:700;">excise '+fmt$(EXCISE_RATE*Number(cp.first_sale))+'</span>':'')+'</div>');
   }).join("");
-  return'<div class="section-title">COST PROFILES</div><div class="section-sub">Cost to produce per unit &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
+  return'<div class="section-title">COST PROFILES</div><div class="section-sub">Cost to produce per unit (no excise) &middot; first-sale price = what JCB Manufacturing charges Johnny Creek Baits; excise is 10% of it &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
 }
 
 function getYTDLogs(){
@@ -478,7 +496,7 @@ function getYTDLogs(){
 function getYTDExpenses(){
   if(!expReady)return[];
   var y=String(new Date().getFullYear());
-  return expenses.filter(function(e){return e.month&&e.month.startsWith(y);});
+  return expenses.filter(function(e){return e.month&&e.month.startsWith(y)&&e.category!==EXCISE_CAT;});
 }
 
 function reportHTML(){
@@ -527,11 +545,11 @@ function reportHTML(){
   var rSponsorCogs=0,rSponsorUnits=0;
   fl.forEach(function(l){
     if(l.ch==="Sponsorship/Promo"){
-      rSponsorCogs+=calcOrder(l,products).cogs;
+      var so=calcOrder(l,products);rSponsorCogs+=so.cogs-so.excise;
       rSponsorUnits+=parseItems(l.items).reduce(function(acc,i){return acc+i.qty;},0)||l.qty;
     }
   });
-  var rPaidCogs=s.cogs-rSponsorCogs;
+  var rPaidCogs=s.cogs-s.excise-rSponsorCogs;
 
   var netColor=s.net>=0?"#2563eb":"#dc2626";
   var netBg=s.net>=0?"#eff6ff":"#fef2f2";
@@ -547,7 +565,8 @@ function reportHTML(){
   }).join("");
 
   var rCogsRows=(rPaidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;">-'+fmt$(rPaidCogs)+'</span></div>':'')
-    +(rSponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship / Promo Cost</span><span style="font-weight:600;">-'+fmt$(rSponsorCogs)+'</span></div>':'');
+    +(rSponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship / Promo Cost</span><span style="font-weight:600;">-'+fmt$(rSponsorCogs)+'</span></div>':'')
+    +(s.excise>0?'<div class="pl-row"><span style="color:#475569;">Federal Excise Tax (10% of first sale)</span><span style="font-weight:600;">-'+fmt$(s.excise)+'</span></div>':'');
 
   var rSponsorNote=rSponsorUnits>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Units given away (Sponsorship/Promo)</span><span style="color:#94a3b8;font-weight:600;">'+rSponsorUnits+' units &middot; '+fmt$(rSponsorCogs)+' cost</span></div>':'';
 
@@ -701,9 +720,27 @@ function trHTML(){
   var incHTML='<div class="card" style="border:1px solid #fde68a;"><div style="font-weight:700;font-size:13px;margin-bottom:4px;">&#x26A0;&#xFE0F; Other Stock Increases <span style="color:#94a3b8;font-weight:500;font-size:11px;">'+incTotal+(incTotal===1?' bag':' bags')+' &middot; might be unlogged production</span></div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">+ taps, new products, positive edits/adjustments in '+monthLabel(trMonth)+'. These are NOT on the PO unless re-entered as Receive Production.</div>'+(incList.length===0?'<div style="font-size:12px;color:#94a3b8;">None.</div>':incList.slice(0,80).map(function(x){return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;">'+prodLabel(x.name,x.color)+'</div><div style="font-size:10px;color:#94a3b8;">'+x.day+' &middot; '+escHtml(x.type)+(x.n>1?' &times;'+x.n:'')+' &middot; '+escHtml(x.who)+(x.note&&x.n===1?' &middot; '+escHtml(x.note):'')+'</div></div><span class="exp-cat" style="background:#fffbeb;color:#d97706;">+'+x.qty+'</span></div>';}).join("")+(incList.length>80?'<div style="font-size:10px;color:#94a3b8;margin-top:6px;">+'+(incList.length-80)+' more</div>':''))+'</div>';
   // This month's batches (editable)
   var mbHTML='<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">&#x1F9EA; Batches Made in '+monthLabel(trMonth)+'</div>'+(mb.length===0?'<div style="font-size:12px;color:#94a3b8;">No batches logged. Log them in the inventory app &rarr; Stock &rarr; Log Batch Made.</div>':mb.map(function(b){var got=batchRecvAll[b.id]||0;return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;">'+prodLabel(b.product_name,b.color)+' <span style="color:#7c3aed;">&times;'+b.qty+'</span></div><div style="font-size:10px;color:#94a3b8;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; made by '+escHtml(b.made_by||"?")+' &middot; entered by <strong>'+escHtml(b.entered_by||"?")+'</strong>'+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+new Date(b.edited_at).toLocaleDateString():'')+' &middot; received '+got+'</div></div><button class="btn-gray" style="padding:5px 10px;font-size:11px;" data-tredb="'+b.id+'">Edit</button></div>';}).join(""))+'</div>';
-  return head+userBar+monthBar+kpis+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">&#x1F4E6; Produced vs Received &middot; '+monthLabel(trMonth)+'</div>'+tbl+'</div>'+obHTML+incHTML+mbHTML+posHTML();
+  return head+userBar+monthBar+kpis+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">&#x1F4E6; Produced vs Received &middot; '+monthLabel(trMonth)+'</div>'+tbl+'</div>'+obHTML+incHTML+mbHTML+posHTML()+exciseHTML();
 }
 
+// Excise by quarter (Form 720): owed = 10% of first-sale value on POs dated in the quarter; paid = expenses in EXCISE_CAT
+function poLinesOf(p){var l=p.lines;if(typeof l==="string"){try{l=JSON.parse(l);}catch(e){l=[];}}return l||[];}
+function exciseHTML(){
+  var y=trMonth.slice(0,4),rows="",tOwed=0,tPaid=0;
+  for(var q=1;q<=4;q++){
+    var ms=[0,1,2].map(function(i){return y+"-"+String((q-1)*3+1+i).padStart(2,"0");});
+    var qp=pos.filter(function(p){return p.po_date&&ms.indexOf(String(p.po_date).slice(0,7))>=0;});
+    var val=0,owed=0;qp.forEach(function(p){var d={lines:poLinesOf(p)};val+=poTotal(d);owed+=poExcise(d);});
+    var paid=0;if(expReady)expenses.forEach(function(e){if(e.category===EXCISE_CAT&&ms.indexOf(e.month)>=0)paid+=Number(e.amount);});
+    tOwed+=owed;tPaid+=paid;
+    rows+='<tr style="border-top:1px solid #f1f5f9;"><td style="padding:6px 4px;font-weight:700;">Q'+q+'</td><td style="padding:6px 4px;text-align:right;">'+qp.length+'</td><td style="padding:6px 4px;text-align:right;">'+fmt$(val)+'</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#7c3aed;">'+fmt$(owed)+'</td><td style="padding:6px 4px;text-align:right;">'+fmt$(paid)+'</td></tr>';
+  }
+  var missing=costProfiles.filter(function(cp){return NO_EXCISE_SERIES.indexOf(cp.series)<0&&!hasFirstSale(cp)&&products.some(function(p){return matchCostProfile(p)===cp;});}).map(function(cp){return cp.name;});
+  return'<div class="card" style="border:1px solid #ddd6fe;"><div style="font-weight:700;font-size:13px;margin-bottom:2px;">&#x1F3DB;&#xFE0F; Federal Excise Tax &middot; '+y+'</div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">10% of the first sale (POs from JCB Manufacturing) &middot; filed quarterly on Form 720 &middot; paid = expenses in &ldquo;'+EXCISE_CAT+'&rdquo;</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.05em;"><th style="text-align:left;padding:4px;">Qtr</th><th style="text-align:right;padding:4px;">POs</th><th style="text-align:right;padding:4px;">First-sale value</th><th style="text-align:right;padding:4px;">Excise owed</th><th style="text-align:right;padding:4px;">Paid</th></tr></thead><tbody>'+rows
+    +'<tr style="border-top:2px solid #e2e8f0;font-weight:700;"><td style="padding:6px 4px;" colspan="3">Year</td><td style="padding:6px 4px;text-align:right;color:#7c3aed;">'+fmt$(tOwed)+'</td><td style="padding:6px 4px;text-align:right;">'+fmt$(tPaid)+'</td></tr></tbody></table>'
+    +(missing.length?'<div style="font-size:11px;color:#dc2626;margin-top:8px;">No first-sale price yet (no excise counted): '+escHtml(missing.join(", "))+' &mdash; set it on the Costs tab.</div>':'')+'</div>';
+}
 function poStatusStyle(s){return{Draft:"background:#f1f5f9;color:#475569;",Issued:"background:#eff6ff;color:#2563eb;",Received:"background:#faf5ff;color:#7c3aed;",Paid:"background:#dcfce7;color:#16a34a;"}[s]||"";}
 function posHTML(){
   var list=pos.length===0?'<div style="font-size:12px;color:#94a3b8;">No purchase orders yet.</div>':pos.map(function(p){return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:700;">'+escHtml(p.po_number||"(no #)")+' <span class="exp-cat" style="'+poStatusStyle(p.status)+'">'+escHtml(p.status)+'</span></div><div style="font-size:10px;color:#94a3b8;">'+(p.po_date||"")+' &middot; period '+(p.period_start||"?")+' &rarr; '+(p.period_end||"?")+' &middot; '+(p.markup_pct)+'% markup'+(p.paid_date?' &middot; paid '+p.paid_date:'')+' &middot; by '+escHtml(p.updated_by||p.created_by||"?")+'</div></div><div style="text-align:right;margin-left:8px;"><div style="font-weight:700;">'+fmt$(p.total)+'</div><div style="display:flex;gap:4px;margin-top:4px;justify-content:flex-end;"><button class="btn-gray" style="padding:4px 9px;font-size:11px;" data-poedit="'+p.id+'">Edit</button><button class="btn-gray" style="padding:4px 9px;font-size:11px;" data-poprint="'+p.id+'">Print</button></div></div></div>';}).join("");
@@ -751,9 +788,12 @@ function lastPO(){return pos.slice().sort(function(a,b){return String(b.created_
 function nextPONumber(){var mx=0;pos.forEach(function(p){var m=String(p.po_number||"").match(/(\d+)\s*$/);if(m)mx=Math.max(mx,parseInt(m[1]));});return"TPO-"+String(mx+1).padStart(4,"0");}
 function unitCostFor(pid,baits){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);return cp?round2(bagCOGS(cp,p,baits)):null;}
 function priceAt(cost,markup){return cost==null?0:round2(cost*(1+(Number(markup)||0)/100));}
+// PO unit price: the product's first-sale price when set (that's the excise base), else cost + markup
+function poPriceFor(pid,cost,markup,baits){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);return hasFirstSale(cp)?round2(firstSalePrice(cp,p,baits)):priceAt(cost,markup);}
+function poExcise(d){return round2(d.lines.reduce(function(s,l){var p=products.find(function(x){return x.id===l.pid;});if(p&&NO_EXCISE_SERIES.indexOf(p.series)>=0)return s;return s+EXCISE_RATE*(Number(l.qty)||0)*(Number(l.price)||0);},0));}
 function makeLine(pid,qty,markup,baits){
   var p=products.find(function(x){return x.id===pid;})||{};var cost=unitCostFor(pid,baits);
-  var l={pid:pid,name:(p.name||"")+(baits?" ("+baits+"-bait bag, custom order)":""),color:p.color||"",series:p.series||"",qty:qty,cost:cost,price:priceAt(cost,markup)};
+  var l={pid:pid,name:(p.name||"")+(baits?" ("+baits+"-bait bag, custom order)":""),color:p.color||"",series:p.series||"",qty:qty,cost:cost,price:poPriceFor(pid,cost,markup,baits)};
   if(baits){l.baits=baits;l.custom=true;}
   return l;
 }
@@ -816,10 +856,10 @@ function renderPOEditor(){
     +'<div style="'+g2+'">'+poField("Vendor","vendor_name")+poField("Buyer","buyer_name")+'</div>'
     +'<div style="'+g2+'"><div class="field-wrap"><label class="field-label">Vendor Address</label><textarea class="field-input" rows="3" data-pof="vendor_address">'+escHtml(d.vendor_address)+'</textarea></div><div class="field-wrap"><label class="field-label">Buyer Address</label><textarea class="field-input" rows="3" data-pof="buyer_address">'+escHtml(d.buyer_address)+'</textarea></div></div>'
     +'<div class="field-wrap"><label class="field-label">Notes</label><textarea class="field-input" rows="2" data-pof="notes">'+escHtml(d.notes)+'</textarea></div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px;"><button class="btn-outline" id="poReprice" style="padding:7px 11px;font-size:11px;">Re-price at markup</button><button class="btn-outline" id="poRefresh" style="padding:7px 11px;font-size:11px;">Refresh qty from inventory</button></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px;"><button class="btn-outline" id="poReprice" style="padding:7px 11px;font-size:11px;">Re-price (first-sale price, else markup)</button><button class="btn-outline" id="poRefresh" style="padding:7px 11px;font-size:11px;">Refresh qty from inventory</button></div>'
     +'<div class="pl-section-hd">Lines ('+d.lines.length+')</div>'+(lines||'<div style="font-size:12px;color:#94a3b8;padding:8px 0;">No lines. Nothing was received in this period, or add one below.</div>')
     +'<div style="display:flex;gap:6px;margin:10px 0;"><select class="field-input" id="poAddSel" style="flex:1;">'+addOpts+'</select><button class="btn-gray" id="poAdd">+ Add line</button></div>'
-    +'<div class="pl-total-row"><span>TOTAL</span><span id="poTot" style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:#ea580c;">'+fmt$(poTotal(d))+'</span></div>'
+    +'<div class="pl-total-row"><span>TOTAL</span><span id="poTot" style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:#ea580c;">'+fmt$(poTotal(d))+'</span></div><div class="pl-row" style="font-size:12px;"><span style="color:#64748b;">Federal excise owed by JCB Manufacturing (10%)</span><span id="poExc" style="font-weight:700;color:#7c3aed;">'+fmt$(poExcise(d))+'</span></div>'
     +(d.id?'<div style="font-size:10px;color:#94a3b8;margin:4px 0 10px;">Created by '+escHtml(d.created_by||"?")+(d.updated_by?' &middot; last updated by '+escHtml(d.updated_by)+' '+new Date(d.updated_at).toLocaleString():'')+'</div>':'')
     +'<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn-primary" id="poSave" style="flex:1;padding:12px;font-size:14px;">Save</button><button class="btn-gray" id="poPrint">Print / PDF</button>'+(d.id?'<button class="del-btn" id="poDel" style="padding:10px 14px;">Delete</button>':'')+'</div>';
   wirePOEditor();
@@ -833,7 +873,7 @@ function wirePOEditor(){
     d[k]=v;
     if(k==="status"&&v==="Paid"&&!d.paid_date){d.paid_date=localDateStr(new Date());var pd=document.querySelector('#poBody [data-pof="paid_date"]');if(pd)pd.value=d.paid_date;}
   };});
-  var upd=function(i){var t=document.querySelector('[data-polt="'+i+'"]');if(t)t.textContent=fmt$((Number(d.lines[i].qty)||0)*(Number(d.lines[i].price)||0));document.getElementById("poTot").textContent=fmt$(poTotal(d));};
+  var upd=function(i){var t=document.querySelector('[data-polt="'+i+'"]');if(t)t.textContent=fmt$((Number(d.lines[i].qty)||0)*(Number(d.lines[i].price)||0));document.getElementById("poTot").textContent=fmt$(poTotal(d));var pe=document.getElementById("poExc");if(pe)pe.textContent=fmt$(poExcise(d));};
   document.querySelectorAll("[data-polq]").forEach(function(el){el.oninput=function(){var i=parseInt(el.dataset.polq);d.lines[i].qty=Math.max(0,parseInt(el.value)||0);upd(i);};});
   document.querySelectorAll("[data-polp]").forEach(function(el){el.oninput=function(){var i=parseInt(el.dataset.polp);d.lines[i].price=Math.max(0,parseFloat(el.value)||0);upd(i);};el.onblur=function(){var i=parseInt(el.dataset.polp);d.lines[i].price=round2(d.lines[i].price);el.value=d.lines[i].price;upd(i);};});
   document.querySelectorAll("[data-polrm]").forEach(function(el){el.onclick=function(){d.lines.splice(parseInt(el.dataset.polrm),1);renderPOEditor();};});
@@ -844,7 +884,7 @@ function wirePOEditor(){
   };
   document.getElementById("poReprice").onclick=function(){
     var n=0,skipped=0;
-    d.lines.forEach(function(l){var c=l.pid!=null?unitCostFor(l.pid,l.baits):null;if(c==null){skipped++;return;}l.cost=c;l.price=priceAt(c,d.markup_pct);n++;});
+    d.lines.forEach(function(l){var c=l.pid!=null?unitCostFor(l.pid,l.baits):null;if(c==null){skipped++;return;}l.cost=c;l.price=poPriceFor(l.pid,c,d.markup_pct,l.baits);n++;});
     renderPOEditor();showToast("Re-priced "+n+" lines at "+d.markup_pct+"%"+(skipped?" ("+skipped+" without cost left as-is)":""));
   };
   document.getElementById("poRefresh").onclick=function(){
@@ -1003,6 +1043,13 @@ function wire(){
       impPrev=null;impText="";impMsg="";render();
     }).catch(function(e){showToast("Error: "+e.message,"err");});
   };
+  document.querySelectorAll(".fs-inp").forEach(function(inp){
+    inp.onchange=function(){
+      var cp=costProfiles[parseInt(inp.dataset.fsidx)],v=inp.value.trim(),n=parseFloat(v);
+      if(v===""){cp.first_sale=null;}else if(!isNaN(n)&&n>=0){cp.first_sale=Math.round(n*100)/100;}else{showToast("Enter a valid price","err");return;}
+      saveCosts();render();showToast("Saved ✓");
+    };
+  });
   document.querySelectorAll(".cp-inp").forEach(function(inp){
     inp.onchange=function(){
       var idx=parseInt(inp.dataset.cpidx);

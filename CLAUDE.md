@@ -43,7 +43,8 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   `[{pid,name,color,series,qty,cost,price}]`, total, paid_date, created_by/updated_by). Schema + RLS in
   `supabase/sql/2026-10-10_intercompany_transfers.sql` (run manually in the SQL editor — the CLI token has no DB access).
 - `expenses` — monthly expenses (month, category, amount, description, created_by)
-- `cost_profiles` — COGS per product (id, name, series, unit, cogs); seeded on first load
+- `cost_profiles` — COGS per product (id, name, series, unit, cogs = production cost WITHOUT excise, first_sale = JCB Mfg →
+  LLC transfer price per unit, the excise base); seeded on first load. SQL: `supabase/sql/2026-10-13_excise_first_sale.sql`
 
 ## Backups
 - `backup_supabase.py` exports all 5 tables (JSON + CSV) to
@@ -110,12 +111,21 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   "Their PO #" stored in `logs.project`. Lines are `{pid,name,color,qty,price,baits,custom:true}`. Bagged straight from
   production → shelf stock is never checked, deducted, edited or restocked (returns are recorded only). Edit Order keeps
   Custom locked (and other orders can't switch to it). Invoices like Dealer/Distro (Net 30, AR, Mark as Paid).
-  Finance: COGS per bag = `BAG_COST` ($0.16, Thomas 2026-10-13) + (cost profile − bag) × baits / pack (`bagCOGS`); Transfers PO adds
+  Finance: COGS per bag = `BAG_COST` ($0.20 avg) + (cost profile − bag) × baits / pack (`bagCOGS`); Transfers PO adds
   custom-order bags as their own lines ("N-bait bag, custom order") via `linesFromCustom`.
 - Sponsorship/Promo, Internal, Sample/Promo → $0 revenue
 - JC Walker: Dealer/Distro → $10.99
 - Soft plastics (pack≥8, price≤$7.50): Dealer $3.50, Distro $2.80, Pro Staff $5.00
 - Everything else: stored `item.price` from checkout
+
+## Federal excise tax (profit.html)
+- 10% of the FIRST sale (JCB Manufacturing → Johnny Creek Baits, LLC) = `EXCISE_RATE` × `cost_profiles.first_sale`
+  (soft plastics $1.10/bag → $0.11; Variety Pack $7.70; custom-size bags prorate by baits). Not set → no excise; Apparel never.
+- `getItemCOGS` = BOM cost + excise, so every margin includes it; `calcOrder` also returns `excise`. P&L + Report show a
+  "Federal Excise Tax" COGS line. Expenses in category "Federal Excise Tax" (payments) are excluded from operating expenses
+  (`getPeriodExpenses`) so the tax isn't counted twice.
+- POs default to the first-sale price (else cost + markup) and show excise owed; Transfers tab has a quarterly excise card
+  (owed = 10% of PO value by po_date, paid = excise expenses) for Form 720.
 
 ## Key Functions / Architecture
 - `parseItems(raw)` — handles both `log.items` formats
@@ -247,3 +257,9 @@ with the code. Update the sections above if architecture changed.
   Soft plastic cost profiles (8 series) $0.84 → **$0.68**/bag, Variety Pack $7.28 → $4.76 (7 × $0.68), updated in Supabase
   `cost_profiles` + `DEFAULT_COSTS`; removed the stale `COGS_CORRECTIONS` 7.28 override. Walker $6.31 and Glide $44.25 kept.
   Note: cost profiles have no effective dates, so all past months' COGS restate at the new cost.
+- **2026-10-13** — Excise tax as its own line (Thomas): BOM sheet's built-in excise (10% of cost) was double counting, so cost
+  profiles are production cost only — soft plastics **$0.67** (8 × $0.0586 + $0.20 avg bag), Variety Pack $4.69 — and excise
+  is 10% of the first-sale price ($1.10/bag → $0.11). New column `cost_profiles.first_sale` (SQL run by Thomas). Costs tab
+  "First sale" field, P&L/Report excise line, excise payments no longer in operating expenses (May 2026 had $790), PO priced at
+  first sale + excise owed, Transfers quarterly excise card. Tested 12/12 in-page (no DB writes). Open: first-sale prices for
+  Glide, Walker, Kanji Ball, Swim Bait (no excise counted until set).
