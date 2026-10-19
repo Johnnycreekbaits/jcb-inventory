@@ -275,3 +275,5 @@ with the code. Update the sections above if architecture changed.
   Labels tab (`labels` table) synced the same way: 82 label colors renamed by barcode, 3 Stick Bait Green Pumpkin
   Blue/Purple/Red Flake labels removed (not on sheet); 100 labels left. Longest printed name is now Paddle Tail Green Ghost
   (71 chars, ~3 lines at 8pt) — needs a test print.
+  Later (Thomas fixed the sheet): Blackberry → "Blackberry w/ Purple Flake", Oxblood → "Oxblood & Jelly w/ Red & Blue Flake"
+  (products, labels, COLORS). Green Ghost and the other long names print fine (Thomas).
