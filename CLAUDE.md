@@ -272,3 +272,6 @@ with the code. Update the sections above if architecture changed.
   no orders). Variety Pack's Ringo pick is now any Neko/Finesse Worm whose color starts "Ringo", most stock wins
   (`pickRingo()` in the app + `shopify-order`, redeployed); `COLORS` swatch list updated to the new names. Shopify variant
   names stay as they are on purpose (orders match by barcode). JC Walkers stay in the app; added to the sheet, Thomas fills barcodes. Backup before: `JCB Backups\Supabase\2026-10-19_0942`. Past orders keep their old color text.
+  Labels tab (`labels` table) synced the same way: 82 label colors renamed by barcode, 3 Stick Bait Green Pumpkin
+  Blue/Purple/Red Flake labels removed (not on sheet); 100 labels left. Longest printed name is now Paddle Tail Green Ghost
+  (71 chars, ~3 lines at 8pt) — needs a test print.
