@@ -42,7 +42,7 @@ check("WS Walker = 2 units pid 1003", ws.items[1]?.pid === 1003 && ws.items[1].q
 const vp = planOrder({ line_items: [{ sku: "JCB-VAR7", title: "Variety Pack", quantity: 1, price: "43.93" }] }, products);
 const comps = vp.items[0]?.components || [];
 check("variety pack has 7 components", comps.length === 7, comps);
-check("includes Ringo's Gift", comps.some((c) => c.color === "Ringo's Gift"), comps);
+check("includes Ringo's Gift", comps.some((c) => /^Ringo's Gift/.test(c.color)), comps);
 check("no deduction on 1201", vp.deductions.every((d) => d.pid !== 1201) && vp.deductions.length === 7, vp.deductions);
 check("totalQty counts 7 bags", vp.totalQty === 7, vp.totalQty);
 console.log("    picked:", comps.map((c) => `${c.name} ${c.color}`).join(", "));

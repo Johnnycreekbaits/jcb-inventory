@@ -265,3 +265,9 @@ with the code. Update the sections above if architecture changed.
   Glide, Walker, Kanji Ball, Swim Bait (no excise counted until set).
 - **2026-10-13** — First-sale prices at the soft-plastic ratio ($1.10 / $0.67 = 1.642×, Thomas): JC Walker $10.36, XG8 Glide $71.01,
   Kanji Ball $2.46 (cost $1.50 has no BOM). Glide cost $44.25 → $43.25 (sheet: paint & clear coat now $1.00). Swim Bait not set yet.
+- **2026-10-19** — Color names now match the "Standardized (for review)" tab of the barcode sheet exactly (Thomas): 84
+  `products.color` renamed by barcode (e.g. "Bloodline" → "Bloodline - Red Flake", "Ringos Gift" → "Ringo's Gift - Purple
+  Flake", Baby Bass back to "Baby Bass White & Melon Black Flake"). Rule (Thomas): a bait without a name + barcode on the
+  sheet doesn't belong in the app — deleted 3 Stick Bait Green Pumpkin Blue/Purple/Red Flake (815895/815864/815925, qty 0,
+  no orders). Variety Pack lookup now matches `/^Ringo's Gift/` (app + `shopify-order`, redeployed); `COLORS` swatch list
+  updated to the new names. Backup before: `JCB Backups\Supabase\2026-10-19_0942`. Past orders keep their old color text.

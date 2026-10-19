@@ -31,7 +31,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // Same picks as openVarietyPackModal(): Ringo's Gift + top Nekos/Finesse Worms by stock.
 // `products` must be sorted by name,color like the app loads them.
 export function pickVarietyComponents(products: Product[]): Product[] | null {
-  const rg = products.find((p) => p.color === "Ringo's Gift" && (p.series === "Finesse Worms" || p.series === "Nekos"));
+  const rg = products.find((p) => /^Ringo's Gift/.test(p.color || "") && (p.series === "Finesse Worms" || p.series === "Nekos"));
   const byQty = (a: Product, b: Product) => b.qty - a.qty;
   let nekos = products.filter((p) => p.series === "Nekos" && (!rg || p.id !== rg.id)).sort(byQty).slice(0, 4);
   const rgWorm = rg && rg.series === "Finesse Worms";
