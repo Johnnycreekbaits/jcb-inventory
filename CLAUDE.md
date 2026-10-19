@@ -269,5 +269,6 @@ with the code. Update the sections above if architecture changed.
   `products.color` renamed by barcode (e.g. "Bloodline" → "Bloodline - Red Flake", "Ringos Gift" → "Ringo's Gift - Purple
   Flake", Baby Bass back to "Baby Bass White & Melon Black Flake"). Rule (Thomas): a bait without a name + barcode on the
   sheet doesn't belong in the app — deleted 3 Stick Bait Green Pumpkin Blue/Purple/Red Flake (815895/815864/815925, qty 0,
-  no orders). Variety Pack lookup now matches `/^Ringo's Gift/` (app + `shopify-order`, redeployed); `COLORS` swatch list
-  updated to the new names. Backup before: `JCB Backups\Supabase\2026-10-19_0942`. Past orders keep their old color text.
+  no orders). Variety Pack's Ringo pick is now any Neko/Finesse Worm whose color starts "Ringo", most stock wins
+  (`pickRingo()` in the app + `shopify-order`, redeployed); `COLORS` swatch list updated to the new names. Shopify variant
+  names stay as they are on purpose (orders match by barcode). JC Walkers stay in the app; added to the sheet, Thomas fills barcodes. Backup before: `JCB Backups\Supabase\2026-10-19_0942`. Past orders keep their old color text.

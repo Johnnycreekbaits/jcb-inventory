@@ -470,8 +470,11 @@ function addToCart(prod){
   saveCart();
 }
 
+// Variety Pack always gets one Ringo color (any Neko/Finesse Worm starting "Ringo"), the one with the most stock.
+function pickRingo(){return products.filter(function(p){return /^Ringo/.test(p.color||"")&&(p.series==="Finesse Worms"||p.series==="Nekos");}).sort(function(a,b){return b.qty-a.qty;})[0];}
+
 function openVarietyPackModal(prod){
-  var rg=products.find(function(p){return /^Ringo's Gift/.test(p.color||"")&&(p.series==="Finesse Worms"||p.series==="Nekos");});
+  var rg=pickRingo();
   var nekos=products.filter(function(p){return p.series==="Nekos"&&(!rg||p.id!==rg.id);}).sort(function(a,b){return b.qty-a.qty;}).slice(0,4);
   var worms=(rg&&rg.series==="Finesse Worms"?[rg]:[]).concat(products.filter(function(p){return p.series==="Finesse Worms"&&(!rg||p.id!==rg.id);}).sort(function(a,b){return b.qty-a.qty;}).slice(0,rg&&rg.series==="Finesse Worms"?2:3));
   if(rg&&rg.series==="Nekos")nekos=[rg].concat(nekos.slice(0,3));
@@ -651,7 +654,7 @@ function invHTML(){
   var cards=f.map(function(p){
     var st=STATUS[getStatus(p.qty,p.min)];
     if(p.id===1201){
-      var vprg=products.find(function(x){return /^Ringo's Gift/.test(x.color||"")&&(x.series==="Finesse Worms"||x.series==="Nekos");});
+      var vprg=pickRingo();
       var vpNekos=products.filter(function(x){return x.series==="Nekos"&&(!vprg||x.id!==vprg.id);}).sort(function(a,b){return b.qty-a.qty;}).slice(0,4);
       var vpWorms=(vprg&&vprg.series==="Finesse Worms"?[vprg]:[]).concat(products.filter(function(x){return x.series==="Finesse Worms"&&(!vprg||x.id!==vprg.id);}).sort(function(a,b){return b.qty-a.qty;}).slice(0,vprg&&vprg.series==="Finesse Worms"?2:3));
       if(vprg&&vprg.series==="Nekos")vpNekos=[vprg].concat(vpNekos.slice(0,3));
