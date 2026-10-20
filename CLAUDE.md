@@ -12,7 +12,7 @@ All pages are single-file HTML/CSS/JS — no build step, no framework, no npm. K
 | File | Purpose | Live URL |
 |---|---|---|
 | `index.html` | Inventory app — tabs: Stock, Checkout, Returns, Labels, Reports, History, Import, Export | https://johnnycreekbaits.github.io/jcb-inventory/ |
-| `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Sales by Product (id `prod`), P&L, Expenses, Costs, Transfers, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
+| `profit.html` | Finance app (password-gated, owner/investor portal) — tabs: Dashboard, Orders (id `ord`), Sales by Product (id `prod`), P&L, Expenses, Costs, Transfers, Report | https://johnnycreekbaits.github.io/jcb-inventory/profit.html |
 
 - **Repo:** https://github.com/Johnnycreekbaits/jcb-inventory
 - **Deploy:** push to `main` → GitHub Pages rebuilds (~2 min). `.github/workflows/deploy.yml`
@@ -130,7 +130,10 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 ## Key Functions / Architecture
 - `parseItems(raw)` — handles both `log.items` formats
 - `matchCostProfile(prod)` — matches series first, then name substring
-- `calcOrder(log, prods)` — uses stored item.price (not recalculated from channel)
+- `calcOrder(log, prods)` — uses stored item.price (not recalculated from channel); sums `calcOrderLines()` (one entry per
+  line, net of partial returns), which the Orders tab also uses, so per-order and total numbers can't drift apart
+- `orderProfit(log)` — Orders tab: revenue − COGS (incl. excise) + shipping net (`ship_paid − ship_cost`) − estimated
+  Shopify card fee (2.9% + $0.30 on revenue + shipping charged, only for `project` "Shopify #…"; fees aren't recorded)
 - `getPeriodLogs()` — filters by local date string, excludes `st="Returned"`
 - Finance auth: `localStorage.getItem("jcb_finance_auth")`
 - Cost profiles load from Supabase non-blocking, localStorage fallback
@@ -277,3 +280,9 @@ with the code. Update the sections above if architecture changed.
   (71 chars, ~3 lines at 8pt) — needs a test print.
   Later (Thomas fixed the sheet): Blackberry → "Blackberry w/ Purple Flake", Oxblood → "Oxblood & Jelly w/ Red & Blue Flake"
   (products, labels, COLORS). Green Ghost and the other long names print fine (Thomas).
+- **2026-10-20** — Finance **Orders** tab (Thomas): profit per sale for the period — channel filter chips, sort (newest /
+  most / least profit / lowest margin), KPI tiles (orders, total profit + margin, avg profit/order, revenue + est. Shopify fees),
+  tap a row for its lines (qty × price, cost, line profit, returned qty), shipping (flags missing label cost) and the fee.
+  Refactored `calcOrder` onto `calcOrderLines`; verified in headless Chrome against live data (read-only) that Dashboard
+  totals are identical to the previous version for every period, and that order profits sum to revenue − COGS + shipping −
+  fees (77 orders). Operating expenses stay on the P&L, not per order.

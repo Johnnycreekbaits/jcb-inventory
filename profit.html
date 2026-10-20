@@ -212,26 +212,40 @@ function returnNetter(log){
   var back=log.st==="Out"&&partialReturns[log.id]?Object.assign({},partialReturns[log.id]):{};
   return function(pid,qty){var r=Math.min(qty,back[pid]||0);if(r)back[pid]-=r;return qty-r;};
 }
-function calcOrder(log,prods){
-  var items=parseItems(log.items);
-  var rev=0,cogs=0,excise=0;
-  var net=returnNetter(log);
+// One entry per order line, net of partial returns. calcOrder sums these, so the Orders tab and every total agree.
+function calcOrderLines(log,prods){
+  var items=parseItems(log.items),net=returnNetter(log),lines=[];
   if(items.length>0){
     items.forEach(function(item){
       var p=prods.find(function(x){return x.id===item.pid;});
       var q=net(item.pid,item.qty);
-      rev+=q*(item.price||0);
-      cogs+=getItemCOGS(q,p,item.baits);
-      excise+=getItemExcise(q,p,item.baits);
+      lines.push({name:item.name||(p&&p.name)||"Item",color:item.color||(p&&p.color)||"",qty:q,returned:(item.qty||0)-q,baits:item.baits,
+        price:item.price||0,rev:q*(item.price||0),cogs:getItemCOGS(q,p,item.baits),excise:getItemExcise(q,p,item.baits)});
     });
   }else{
     var p=prods.find(function(x){return x.id===log.pid;});
     var q=net(log.pid,log.qty);
-    rev+=q*getChannelPrice(p||{price:log.price||0,pack:8},log.ch||"Retail");
-    cogs+=getItemCOGS(q,p);
-    excise+=getItemExcise(q,p);
+    var price=getChannelPrice(p||{price:log.price||0,pack:8},log.ch||"Retail");
+    lines.push({name:p?p.name:"Item",color:p?p.color:"",qty:q,returned:(log.qty||0)-q,price:price,rev:q*price,cogs:getItemCOGS(q,p),excise:getItemExcise(q,p)});
   }
+  return lines;
+}
+function calcOrder(log,prods){
+  var rev=0,cogs=0,excise=0;
+  calcOrderLines(log,prods).forEach(function(l){rev+=l.rev;cogs+=l.cogs;excise+=l.excise;});
   return{rev:rev,cogs:cogs,excise:excise};
+}
+// Per-sale profit (Orders tab) = revenue − COGS (incl. excise) + shipping net − estimated Shopify card fee.
+// Shopify fees aren't recorded anywhere, so Shopify orders use the standard online rate on what the customer paid.
+var SHOPIFY_FEE_PCT=0.029,SHOPIFY_FEE_FIXED=0.30;
+function isShopifyOrder(l){return /^Shopify #/.test(l.project||"");}
+function orderProfit(l){
+  var o=calcOrder(l,products);
+  var hasShip=l.ship_paid!=null||l.ship_cost!=null;
+  var ship=hasShip?Number(l.ship_paid||0)-Number(l.ship_cost||0):0;
+  var fee=isShopifyOrder(l)&&o.rev>0?(o.rev+Number(l.ship_paid||0))*SHOPIFY_FEE_PCT+SHOPIFY_FEE_FIXED:0;
+  var profit=o.rev-o.cogs+ship-fee;
+  return{rev:o.rev,cogs:o.cogs,excise:o.excise,hasShip:hasShip,ship:ship,shipMissing:l.ship_paid!=null&&l.ship_cost==null,fee:fee,profit:profit,margin:o.rev>0?profit/o.rev*100:null};
 }
 
 async function hashPw(pw){
@@ -331,6 +345,7 @@ function showLogin(){
 function render(){
   var html="";
   if(activeTab==="dash")html=dashHTML();
+  else if(activeTab==="ord")html=ordersHTML();
   else if(activeTab==="prod")html=prodHTML();
   else if(activeTab==="pl")html=plHTML();
   else if(activeTab==="exp")html=expHTML();
@@ -345,7 +360,7 @@ function hdrHTML(){
   return'<div class="header no-print"><div class="header-inner"><div class="logo"><div class="logo-icon">&#x1F4B0;</div><div><div class="logo-name">JCB Finance</div><div class="logo-sub">Owner Portal</div></div></div><button class="btn-gray" id="btnLogout" style="font-size:11px;padding:6px 12px;">Sign Out</button></div></div>';
 }
 function tabsHTML(){
-  var tabs=[{id:"dash",i:"&#x1F4CA;",l:"Dashboard"},{id:"prod",i:"&#x1F4E6;",l:"Sales by Product"},{id:"pl",i:"&#x1F4C8;",l:"P&L"},{id:"exp",i:"&#x1F4CB;",l:"Expenses"},{id:"costs",i:"&#x1F527;",l:"Costs"},{id:"tr",i:"&#x1F69A;",l:"Transfers"},{id:"rep",i:"&#x1F4C4;",l:"Report"}];
+  var tabs=[{id:"dash",i:"&#x1F4CA;",l:"Dashboard"},{id:"ord",i:"&#x1F9FE;",l:"Orders"},{id:"prod",i:"&#x1F4E6;",l:"Sales by Product"},{id:"pl",i:"&#x1F4C8;",l:"P&L"},{id:"exp",i:"&#x1F4CB;",l:"Expenses"},{id:"costs",i:"&#x1F527;",l:"Costs"},{id:"tr",i:"&#x1F69A;",l:"Transfers"},{id:"rep",i:"&#x1F4C4;",l:"Report"}];
   return'<div class="tabs no-print"><div class="tabs-inner">'+tabs.map(function(t){return'<button class="tab'+(activeTab===t.id?" active":"")+'" data-tab="'+t.id+'">'+t.i+" "+t.l+"</button>";}).join("")+"</div></div>";
 }
 function periodBarHTML(){
@@ -387,6 +402,55 @@ function shippingCardHTML(fl){
   return'<div class="card" style="border:1px solid #bfdbfe;"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">Shipping</div><div style="display:flex;gap:8px;">'
     +cell(fmt$(s.paid),"Collected","#3878C8")+cell(fmt$(s.cost),"Label Cost","#475569")+cell((s.net<0?"-":"")+fmt$(Math.abs(s.net)),"Net",netColor)
     +'</div><div style="font-size:11px;color:#94a3b8;margin-top:8px;text-align:center;">'+s.orders+' orders'+(s.missing?' &middot; <span style="color:#dc2626;font-weight:600;">'+s.missing+' missing label cost</span>':'')+'</div></div>';
+}
+
+// Orders tab: profit per sale for the period, filterable by channel, tap a row for its lines.
+var ordCh="all",ordSort="new",ordOpen={};
+function signed$(n){return(n<0?"-":"")+fmt$(Math.abs(n));}
+function ordersHTML(){
+  var fl=getPeriodLogs();
+  var chs={};fl.forEach(function(l){var c=l.ch||"Other";chs[c]=(chs[c]||0)+1;});
+  if(ordCh!=="all"&&!chs[ordCh])ordCh="all";
+  var rows=fl.filter(function(l){return ordCh==="all"||(l.ch||"Other")===ordCh;}).map(function(l){return{l:l,p:orderProfit(l)};});
+  var sorters={
+    "new":function(a,b){return a.l.date<b.l.date?1:a.l.date>b.l.date?-1:String(b.l.name).localeCompare(String(a.l.name));},
+    "profit":function(a,b){return b.p.profit-a.p.profit;},
+    "loss":function(a,b){return a.p.profit-b.p.profit;},
+    "margin":function(a,b){var x=a.p.margin==null?Infinity:a.p.margin,y=b.p.margin==null?Infinity:b.p.margin;return x-y;}
+  };
+  rows.sort(sorters[ordSort]||sorters["new"]);
+  var t={rev:0,profit:0,fees:0,ship:0};rows.forEach(function(r){t.rev+=r.p.rev;t.profit+=r.p.profit;t.fees+=r.p.fee;t.ship+=r.p.ship;});
+  var chipStyle=function(on){return on?"background:#ea580c;color:#fff;border-color:#ea580c;":"";};
+  var chips='<div class="period-bar no-print"><button class="period-btn" style="'+chipStyle(ordCh==="all")+'" data-ordch="all">All channels ('+fl.length+')</button>'
+    +Object.keys(chs).sort().map(function(c){return'<button class="period-btn" style="'+chipStyle(ordCh===c)+'" data-ordch="'+escHtml(c)+'">'+escHtml(c)+' ('+chs[c]+')</button>';}).join("")+'</div>';
+  var sortSel='<div class="no-print" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span class="field-label" style="margin:0;">Sort</span><select class="field-input" id="ordSort" style="width:auto;padding:7px 10px;font-size:12px;">'
+    +[["new","Newest first"],["profit","Most profit"],["loss","Least profit"],["margin","Lowest margin"]].map(function(o){return'<option value="'+o[0]+'"'+(ordSort===o[0]?" selected":"")+'>'+o[1]+'</option>';}).join("")+'</select></div>';
+  var head=periodBarHTML()+'<div class="section-title">ORDERS</div><div class="section-sub">'+periodLabel()+' &middot; profit per sale (net of returns)</div>';
+  if(rows.length===0)return head+chips+'<div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F9FE;</div><div style="font-weight:600;">No orders in this period</div></div>';
+  var pc=function(n){return n>=0?"#16a34a":"#dc2626";};
+  var kpis='<div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+rows.length+'</div><div class="kpi-lbl">Orders</div></div>'
+    +'<div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:'+pc(t.profit)+';">'+signed$(t.profit)+'</div><div class="kpi-lbl">Total Profit</div><div class="kpi-sub" style="color:'+pc(t.profit)+';">'+(t.rev>0?fmtPct(t.profit/t.rev*100)+' margin':'no revenue')+'</div></div>'
+    +'<div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:'+pc(t.profit)+';">'+signed$(t.profit/rows.length)+'</div><div class="kpi-lbl">Avg Profit / Order</div></div>'
+    +'<div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(t.rev)+'</div><div class="kpi-lbl">Revenue</div>'+(t.fees>0?'<div class="kpi-sub" style="color:#94a3b8;">'+fmt$(t.fees)+' est. Shopify fees</div>':'')+'</div></div>';
+  var list=rows.map(function(r){
+    var l=r.l,p=r.p,open=!!ordOpen[l.id];
+    var who=[l.person,l.ch||"Other",l.project].filter(Boolean).map(escHtml).join(" &middot; ");
+    var parts=['Rev '+fmt$(p.rev),'Cost '+fmt$(p.cogs)];
+    if(p.hasShip)parts.push('Ship '+(p.ship>=0?'+':'')+signed$(p.ship));
+    if(p.fee>0)parts.push('Fee '+fmt$(p.fee));
+    var detail="";
+    if(open){
+      detail='<div style="margin-top:10px;border-top:1px solid #f1f5f9;padding-top:8px;">'+calcOrderLines(l,products).map(function(x){
+        var lp=x.rev-x.cogs;
+        return'<div class="exp-item"><div style="min-width:0;"><div style="font-weight:600;">'+escHtml(x.name)+(x.color?' &middot; '+escHtml(x.color):'')+'</div><div style="font-size:10px;color:#94a3b8;">'+x.qty+' &times; '+fmt$(x.price)+(x.baits?' &middot; '+x.baits+'-bait bag':'')+(x.returned?' &middot; '+x.returned+' returned':'')+' &middot; cost '+fmt$(x.cogs)+'</div></div><div style="font-weight:700;color:'+pc(lp)+';flex-shrink:0;margin-left:8px;">'+signed$(lp)+'</div></div>';
+      }).join("")
+      +(p.hasShip?'<div class="exp-item"><span style="color:#475569;">Shipping: '+fmt$(Number(l.ship_paid||0))+' charged &minus; '+(l.ship_cost!=null?fmt$(Number(l.ship_cost)):'<span style="color:#dc2626;font-weight:600;">label cost not entered</span>')+'</span><span style="font-weight:700;color:'+pc(p.ship)+';">'+signed$(p.ship)+'</span></div>':'')
+      +(p.fee>0?'<div class="exp-item"><span style="color:#475569;">Shopify card fee (est. 2.9% + 30&cent;)</span><span style="font-weight:700;color:#dc2626;">-'+fmt$(p.fee)+'</span></div>':'')
+      +'</div>';
+    }
+    return'<div class="card" data-ordrow="'+escHtml(l.id)+'" style="margin-bottom:8px;cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;"><div style="min-width:0;"><div style="font-weight:700;font-size:13px;">'+escHtml(l.name)+' <span style="font-weight:500;color:#94a3b8;font-size:11px;">'+escHtml(l.date)+'</span></div><div style="font-size:11px;color:#64748b;margin-top:2px;">'+who+'</div><div style="font-size:10px;color:#94a3b8;margin-top:4px;">'+parts.join(" &middot; ")+(p.shipMissing?' &middot; <span style="color:#dc2626;font-weight:600;">label cost missing</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:'+pc(p.profit)+';">'+signed$(p.profit)+'</div><div style="font-size:10px;font-weight:700;color:#94a3b8;">'+(p.margin==null?'no revenue':fmtPct(p.margin))+' &middot; '+(open?'&#x25B2;':'&#x25BC;')+'</div></div></div>'+detail+'</div>';
+  }).join("");
+  return head+chips+sortSel+kpis+list+'<div style="font-size:10px;color:#94a3b8;text-align:center;margin:6px 0 16px;">Profit = revenue &minus; cost of goods (incl. excise) + shipping net &minus; est. Shopify fee. Operating expenses are not included &mdash; see P&amp;L.</div>';
 }
 
 function prodHTML(){
@@ -983,6 +1047,9 @@ function wire(){
   var lo=document.getElementById("btnLogout");if(lo)lo.onclick=function(){localStorage.removeItem("jcb_finance_auth");showLogin();};
   var pr=document.getElementById("btnPrint");if(pr)pr.onclick=function(){window.print();};
   var at=document.getElementById("arTile");if(at)at.onclick=showARModal;
+  document.querySelectorAll("[data-ordch]").forEach(function(b){b.onclick=function(){ordCh=b.dataset.ordch;render();};});
+  var os=document.getElementById("ordSort");if(os)os.onchange=function(e){ordSort=e.target.value;render();};
+  document.querySelectorAll("[data-ordrow]").forEach(function(c){c.onclick=function(){var id=c.dataset.ordrow;ordOpen[id]=!ordOpen[id];var y=window.scrollY;render();window.scrollTo(0,y);};});
   var ems=document.getElementById("expMonthSel");if(ems)ems.onchange=function(e){expMonth=e.target.value;impPrev=null;impMsg="";impText="";render();};
   var ta=document.getElementById("expTA");if(ta)ta.oninput=function(e){impText=e.target.value;};
   var bpe=document.getElementById("btnPreviewExp");
