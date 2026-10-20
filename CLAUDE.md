@@ -286,3 +286,8 @@ with the code. Update the sections above if architecture changed.
   Refactored `calcOrder` onto `calcOrderLines`; verified in headless Chrome against live data (read-only) that Dashboard
   totals are identical to the previous version for every period, and that order profits sum to revenue − COGS + shipping −
   fees (77 orders). Operating expenses stay on the P&L, not per order.
+- **2026-10-20** — Shopify variant names now match the Standardized sheet too (Thomas reversed the 10-19 "keep Shopify names"
+  call): 164 color option values renamed by barcode across retail + WS + Walker + Terp Minnow + Soft Jerk + demo Neko
+  (`productOptionUpdate`; variant IDs/SKUs unchanged, so the webhook is unaffected). J-Rats retired (barcodes reused for Terp
+  Minnow / Soft Jerk) — ignore them. Blue/Orange Walker discontinued (still a variant on the draft Walker (WS) product).
+  Ringo's Gift / Dirty Dawn product photos swapped for transparent PNGs.
