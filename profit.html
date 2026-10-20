@@ -239,6 +239,8 @@ function calcOrder(log,prods){
 // Shopify fees aren't recorded anywhere, so Shopify orders use the standard online rate on what the customer paid.
 var SHOPIFY_FEE_PCT=0.029,SHOPIFY_FEE_FIXED=0.30;
 function isShopifyOrder(l){return /^Shopify #/.test(l.project||"");}
+// Bags given away at $0 (same channels getChannelPrice zeroes): the Orders tab shows them at all-in cost, not as a sale.
+function isGiveawayCh(ch){return ch==="Sample/Promo"||ch==="Internal"||ch==="Sponsorship"||ch==="Sponsorship/Promo";}
 function orderProfit(l){
   var o=calcOrder(l,products);
   var hasShip=l.ship_paid!=null||l.ship_cost!=null;
@@ -419,7 +421,8 @@ function ordersHTML(){
     "margin":function(a,b){var x=a.p.margin==null?Infinity:a.p.margin,y=b.p.margin==null?Infinity:b.p.margin;return x-y;}
   };
   rows.sort(sorters[ordSort]||sorters["new"]);
-  var t={rev:0,profit:0,fees:0,ship:0};rows.forEach(function(r){t.rev+=r.p.rev;t.profit+=r.p.profit;t.fees+=r.p.fee;t.ship+=r.p.ship;});
+  var t={rev:0,profit:0,fees:0,ship:0,give:0,giveBags:0};rows.forEach(function(r){t.rev+=r.p.rev;t.profit+=r.p.profit;t.fees+=r.p.fee;t.ship+=r.p.ship;
+    if(isGiveawayCh(r.l.ch)){t.give+=r.p.cogs;calcOrderLines(r.l,products).forEach(function(x){t.giveBags+=x.qty;});}});
   var chipStyle=function(on){return on?"background:#ea580c;color:#fff;border-color:#ea580c;":"";};
   var chips='<div class="period-bar no-print"><button class="period-btn" style="'+chipStyle(ordCh==="all")+'" data-ordch="all">All channels ('+fl.length+')</button>'
     +Object.keys(chs).sort().map(function(c){return'<button class="period-btn" style="'+chipStyle(ordCh===c)+'" data-ordch="'+escHtml(c)+'">'+escHtml(c)+' ('+chs[c]+')</button>';}).join("")+'</div>';
@@ -431,24 +434,28 @@ function ordersHTML(){
   var kpis='<div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+rows.length+'</div><div class="kpi-lbl">Orders</div></div>'
     +'<div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:'+pc(t.profit)+';">'+signed$(t.profit)+'</div><div class="kpi-lbl">Total Profit</div><div class="kpi-sub" style="color:'+pc(t.profit)+';">'+(t.rev>0?fmtPct(t.profit/t.rev*100)+' margin':'no revenue')+'</div></div>'
     +'<div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:'+pc(t.profit)+';">'+signed$(t.profit/rows.length)+'</div><div class="kpi-lbl">Avg Profit / Order</div></div>'
-    +'<div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(t.rev)+'</div><div class="kpi-lbl">Revenue</div>'+(t.fees>0?'<div class="kpi-sub" style="color:#94a3b8;">'+fmt$(t.fees)+' est. Shopify fees</div>':'')+'</div></div>';
+    +'<div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(t.rev)+'</div><div class="kpi-lbl">Revenue</div>'+(t.fees>0?'<div class="kpi-sub" style="color:#94a3b8;">'+fmt$(t.fees)+' est. Shopify fees</div>':'')+'</div>'
+    +(t.give>0?'<div class="kpi" style="background:#faf5ff;border:1px solid #e9d5ff;"><div class="kpi-val" style="color:#7c3aed;">'+fmt$(t.give)+'</div><div class="kpi-lbl">Giveaway Cost</div><div class="kpi-sub" style="color:#7c3aed;">'+t.giveBags+' units at all-in cost (shipping not incl.)</div></div>':'')+'</div>';
   var list=rows.map(function(r){
     var l=r.l,p=r.p,open=!!ordOpen[l.id];
+    var give=isGiveawayCh(l.ch);
     var who=[l.person,l.ch||"Other",l.project].filter(Boolean).map(escHtml).join(" &middot; ");
-    var parts=['Rev '+fmt$(p.rev),'Cost '+fmt$(p.cogs)];
+    var parts=give?['All-in cost '+fmt$(p.cogs)+' (production + excise)']:['Rev '+fmt$(p.rev),'Cost '+fmt$(p.cogs)];
     if(p.hasShip)parts.push('Ship '+(p.ship>=0?'+':'')+signed$(p.ship));
     if(p.fee>0)parts.push('Fee '+fmt$(p.fee));
     var detail="";
     if(open){
       detail='<div style="margin-top:10px;border-top:1px solid #f1f5f9;padding-top:8px;">'+calcOrderLines(l,products).map(function(x){
         var lp=x.rev-x.cogs;
-        return'<div class="exp-item"><div style="min-width:0;"><div style="font-weight:600;">'+escHtml(x.name)+(x.color?' &middot; '+escHtml(x.color):'')+'</div><div style="font-size:10px;color:#94a3b8;">'+x.qty+' &times; '+fmt$(x.price)+(x.baits?' &middot; '+x.baits+'-bait bag':'')+(x.returned?' &middot; '+x.returned+' returned':'')+' &middot; cost '+fmt$(x.cogs)+'</div></div><div style="font-weight:700;color:'+pc(lp)+';flex-shrink:0;margin-left:8px;">'+signed$(lp)+'</div></div>';
+        var qtyTxt=give?x.qty+' &times; '+fmt$(x.qty?x.cogs/x.qty:0)+' all-in':x.qty+' &times; '+fmt$(x.price)+(x.baits?' &middot; '+x.baits+'-bait bag':'')+(x.returned?' &middot; '+x.returned+' returned':'')+' &middot; cost '+fmt$(x.cogs);
+        if(give&&x.returned)qtyTxt+=' &middot; '+x.returned+' returned';
+        return'<div class="exp-item"><div style="min-width:0;"><div style="font-weight:600;">'+escHtml(x.name)+(x.color?' &middot; '+escHtml(x.color):'')+'</div><div style="font-size:10px;color:#94a3b8;">'+qtyTxt+'</div></div><div style="font-weight:700;color:'+pc(lp)+';flex-shrink:0;margin-left:8px;">'+signed$(lp)+'</div></div>';
       }).join("")
       +(p.hasShip?'<div class="exp-item"><span style="color:#475569;">Shipping: '+fmt$(Number(l.ship_paid||0))+' charged &minus; '+(l.ship_cost!=null?fmt$(Number(l.ship_cost)):'<span style="color:#dc2626;font-weight:600;">label cost not entered</span>')+'</span><span style="font-weight:700;color:'+pc(p.ship)+';">'+signed$(p.ship)+'</span></div>':'')
       +(p.fee>0?'<div class="exp-item"><span style="color:#475569;">Shopify card fee (est. 2.9% + 30&cent;)</span><span style="font-weight:700;color:#dc2626;">-'+fmt$(p.fee)+'</span></div>':'')
       +'</div>';
     }
-    return'<div class="card" data-ordrow="'+escHtml(l.id)+'" style="margin-bottom:8px;cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;"><div style="min-width:0;"><div style="font-weight:700;font-size:13px;">'+escHtml(l.name)+' <span style="font-weight:500;color:#94a3b8;font-size:11px;">'+escHtml(l.date)+'</span></div><div style="font-size:11px;color:#64748b;margin-top:2px;">'+who+'</div><div style="font-size:10px;color:#94a3b8;margin-top:4px;">'+parts.join(" &middot; ")+(p.shipMissing?' &middot; <span style="color:#dc2626;font-weight:600;">label cost missing</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:'+pc(p.profit)+';">'+signed$(p.profit)+'</div><div style="font-size:10px;font-weight:700;color:#94a3b8;">'+(p.margin==null?'no revenue':fmtPct(p.margin))+' &middot; '+(open?'&#x25B2;':'&#x25BC;')+'</div></div></div>'+detail+'</div>';
+    return'<div class="card" data-ordrow="'+escHtml(l.id)+'" style="margin-bottom:8px;cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;"><div style="min-width:0;"><div style="font-weight:700;font-size:13px;">'+escHtml(l.name)+' <span style="font-weight:500;color:#94a3b8;font-size:11px;">'+escHtml(l.date)+'</span></div><div style="font-size:11px;color:#64748b;margin-top:2px;">'+who+'</div><div style="font-size:10px;color:#94a3b8;margin-top:4px;">'+parts.join(" &middot; ")+(p.shipMissing?' &middot; <span style="color:#dc2626;font-weight:600;">label cost missing</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:'+pc(p.profit)+';">'+signed$(p.profit)+'</div><div style="font-size:10px;font-weight:700;color:#94a3b8;">'+(give?'giveaway cost':p.margin==null?'no revenue':fmtPct(p.margin))+' &middot; '+(open?'&#x25B2;':'&#x25BC;')+'</div></div></div>'+detail+'</div>';
   }).join("");
   return head+chips+sortSel+kpis+list+'<div style="font-size:10px;color:#94a3b8;text-align:center;margin:6px 0 16px;">Profit = revenue &minus; cost of goods (incl. excise) + shipping net &minus; est. Shopify fee. Operating expenses are not included &mdash; see P&amp;L.</div>';
 }
