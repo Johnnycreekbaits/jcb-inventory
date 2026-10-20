@@ -291,5 +291,5 @@ with the code. Update the sections above if architecture changed.
 - **2026-10-20** — Shopify variant names now match the Standardized sheet too (Thomas reversed the 10-19 "keep Shopify names"
   call): 164 color option values renamed by barcode across retail + WS + Walker + Terp Minnow + Soft Jerk + demo Neko
   (`productOptionUpdate`; variant IDs/SKUs unchanged, so the webhook is unaffected). J-Rats retired (barcodes reused for Terp
-  Minnow / Soft Jerk) — ignore them. Blue/Orange Walker discontinued (still a variant on the draft Walker (WS) product).
-  Ringo's Gift / Dirty Dawn product photos swapped for transparent PNGs.
+  Minnow / Soft Jerk) — ignore them. Blue/Orange Walker discontinued — deleted from Shopify (WS variant + old draft product).
+  Ringo's Gift / Dirty Dawn product photos swapped for transparent PNGs (old white-box JPGs deleted from Files).
