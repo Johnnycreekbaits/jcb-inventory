@@ -143,7 +143,9 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   the LLC picks, bags and labels. First sale = $0.10 × baits in the unit (item.baits, else product pack; Paddle Tail bags
   hold 6, the rest 8; `BUNDLE_BAITS` Variety 56 / Creek 74 / Season 114). Excise/COGS/PO prices take the order/PO date, so
   orders before Oct 21 keep `cost_profiles.first_sale` ($1.10/bag) and past months don't restate (verified: 400 existing lines,
-  identical COGS). Walker, Glide, Kanji Ball keep their per-unit first sale.
+  identical COGS). Everything else with a first sale (XG8, Walker, Kanji Ball) = cost + `TRANSFER_MARKUP` (20%) from the
+  same date (XG8 $51.90, Walker $7.57, Kanji $1.80); stored `first_sale` applies before it. Thomas: "same 20% markup for any
+  product", soft plastics excepted (flat $0.10/bait).
 - `getItemCOGS` = BOM cost + excise, so every margin includes it; `calcOrder` also returns `excise`. P&L + Report show a
   "Federal Excise Tax" COGS line. Expenses in category "Federal Excise Tax" (payments) are excluded from operating expenses
   (`getPeriodExpenses`) so the tax isn't counted twice.
@@ -338,3 +340,5 @@ with the code. Update the sections above if architecture changed.
   Pushed + `shopify-order` deployed 2026-10-21 (Thomas). Loose-baits SQL still to be run by Thomas in the SQL editor.
   Loose-baits SQL run by Thomas 2026-10-21; columns verified via REST.
 - **2026-10-21 (start date)** — Loose baits / $0.10-per-bait start moved from 2026-11-01 to **2026-10-21** (`PER_BAIT_FROM` in both apps): Thomas's team delivered and bagged two batches today. Checked first: no batches, receipts, orders or POs on/after Oct 21, so nothing restated.
+- **2026-10-21 (20% markup)** — First sale for XG8 / Walker / Kanji Ball = cost + 20% from Oct 21 (was cost × 1.642, the old
+  soft-plastic ratio). XG8 excise $7.10 → $5.19. 400 past order lines verified unchanged. Costs tab shows the from-date price.
