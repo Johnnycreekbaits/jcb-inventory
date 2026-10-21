@@ -179,7 +179,7 @@ function hasFirstSale(cp){return !!cp&&cp.first_sale!=null&&cp.first_sale!==""&&
 // From PER_BAIT_FROM, JCB Manufacturing charges the LLC $0.10 per soft-plastic bait (bags hold different counts), so the
 // first sale = rate × baits in the unit. Before that date cost_profiles.first_sale ($1.10/bag) still applies, so past
 // months don't restate. Pass the order/PO date; no date = today.
-var PER_BAIT_RATE=0.10,PER_BAIT_FROM="2026-11-01";
+var PER_BAIT_RATE=0.10,PER_BAIT_FROM="2026-10-21";
 var PER_BAIT_SERIES=["Baby Hawgs","Craws","Finesse Worms","Nekos","Stick Baits","Soft Jerk","Terp Minnow","Paddle Tail"];
 var BUNDLE_BAITS={"variety-pack":56,"creek-box":74,"season-box":114}; // fixed mixes; Paddle Tail bags hold 6, the rest 8
 function perBaitCount(cp,prod,baits){

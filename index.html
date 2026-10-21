@@ -925,7 +925,7 @@ function loadBatches(){
 }
 // From PER_BAIT_FROM (same date as profit.html) JCB Manufacturing delivers LOOSE baits: a batch logged on/after it counts
 // baits (unit "bait") and the LLC bags them through Receive Production. Earlier batches count bags.
-var PER_BAIT_FROM="2026-11-01";
+var PER_BAIT_FROM="2026-10-21";
 function isBaitBatch(b){return !!b&&b.unit==="bait";}
 function batchUnitFor(date){return date&&date>=PER_BAIT_FROM?"bait":"bag";}
 function batchPack(b){var p=products.find(function(x){return x.id===b.product_id;});return p&&p.pack>0?p.pack:8;}
