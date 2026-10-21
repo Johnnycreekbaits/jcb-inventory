@@ -923,7 +923,16 @@ function loadBatches(){
     batchesReady=true;
   }).catch(function(){batchesReady=false;});
 }
-function batchLeft(b){return b.qty-(batchRecv[b.id]||0);}
+// From PER_BAIT_FROM (same date as profit.html) JCB Manufacturing delivers LOOSE baits: a batch logged on/after it counts
+// baits (unit "bait") and the LLC bags them through Receive Production. Earlier batches count bags.
+var PER_BAIT_FROM="2026-11-01";
+function isBaitBatch(b){return !!b&&b.unit==="bait";}
+function batchUnitFor(date){return date&&date>=PER_BAIT_FROM?"bait":"bag";}
+function batchPack(b){var p=products.find(function(x){return x.id===b.product_id;});return p&&p.pack>0?p.pack:8;}
+function batchBagged(b){return(batchRecv[b.id]||0)*(isBaitBatch(b)?batchPack(b):1);} // in the batch's own unit
+// Bait batch: delivered − bagged (bags received × baits per bag) − returned as waste. Bag batch: made − received.
+function batchLeft(b){return b.qty-batchBagged(b)-(isBaitBatch(b)?(b.waste_baits||0):0);}
+function batchQtyLbl(b,n){return n+(isBaitBatch(b)?" baits":" bags");}
 function openBatches(){return batches.filter(function(b){return batchLeft(b)>0;});}
 function localToday(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function escHtml(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -934,36 +943,44 @@ function batchModal(id){
   if(!batchesReady){showToast("Batches table not set up yet","err");return;}
   var b=id?batches.find(function(x){return x.id===id;}):null;
   if(id&&!b)return;
-  var rec=b?(batchRecv[b.id]||0):0;
+  var rec=b?batchBagged(b):0;
   var prodOpts=products.filter(function(p){return p.series!=="Bundles"&&p.series!=="Apparel";}).map(function(p){return'<option value="'+p.id+'"'+(b&&b.product_id===p.id?" selected":"")+'>'+escHtml(p.name+(p.color?" — "+p.color:""))+'</option>';}).join("");
   var who=["Thomas","Mike","Greg"];if(currentUser&&who.indexOf(currentUser)<0)who.push(currentUser);
   var madeBy=b?b.made_by:currentUser;
-  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mBatch"><div class="modal sheet"><div class="modal-header"><div class="modal-title">'+(b?"EDIT BATCH":"LOG BATCH MADE")+'</div><button class="close-btn" id="mBClose">&times;</button></div>'
-    +'<div style="font-size:11px;color:#64748b;margin-bottom:14px;">Bags made by JCB Manufacturing. This does <strong>not</strong> change stock &mdash; use Receive Production when they go on the shelf.</div>'
+  var unit0=batchUnitFor(b?b.batch_date:localToday());
+  var introFor=function(u){return u==="bait"
+    ?'<strong>Loose baits</strong> delivered by JCB Manufacturing ($0.10/bait). Stock does <strong>not</strong> change &mdash; bag them, then use Receive Production (in bags). Leftovers go back to JCB as reusable waste from the batch list.'
+    :'Bags made by JCB Manufacturing. This does <strong>not</strong> change stock &mdash; use Receive Production when they go on the shelf.';};
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mBatch"><div class="modal sheet"><div class="modal-header"><div class="modal-title">'+(b?"EDIT BATCH":unit0==="bait"?"LOG LOOSE BAITS DELIVERED":"LOG BATCH MADE")+'</div><button class="close-btn" id="mBClose">&times;</button></div>'
+    +'<div id="bIntro" style="font-size:11px;color:#64748b;margin-bottom:14px;">'+introFor(unit0)+'</div>'
     +'<div class="field-wrap"><label class="field-label">Product</label><select class="field-input" id="bProd">'+prodOpts+'</select></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Bags Made</label><input class="field-input" type="number" min="1" id="bQty" value="'+(b?b.qty:"")+'" placeholder="e.g. 200"/></div><div class="field-wrap"><label class="field-label">Date Made</label><input class="field-input" type="date" id="bDate" value="'+(b?b.batch_date:localToday())+'"/></div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label" id="bQtyLbl">'+(unit0==="bait"?"Baits Delivered":"Bags Made")+'</label><input class="field-input" type="number" min="1" id="bQty" value="'+(b?b.qty:"")+'" placeholder="'+(unit0==="bait"?"e.g. 1600":"e.g. 200")+'"/></div><div class="field-wrap"><label class="field-label">Date Made</label><input class="field-input" type="date" id="bDate" value="'+(b?b.batch_date:localToday())+'"/></div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Batch #</label><input class="field-input" id="bNo" value="'+escHtml(b?b.batch_no:nextBatchNo())+'"/></div><div class="field-wrap"><label class="field-label">Made By</label><input class="field-input" id="bMadeBy" list="bWhoList" value="'+escHtml(madeBy)+'"/><datalist id="bWhoList">'+who.map(function(w){return'<option value="'+escHtml(w)+'">';}).join("")+'</datalist></div></div>'
     +'<div class="field-wrap"><label class="field-label">Notes (optional)</label><input class="field-input" id="bNote" value="'+escHtml(b?b.note:"")+'" placeholder="e.g. Heater 2, red flake"/></div>'
-    +(b?'<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">Entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+' &middot; '+rec+' received so far</div>':'')
+    +(b?'<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">Entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+' &middot; '+batchQtyLbl(b,rec)+(isBaitBatch(b)?' bagged':' received')+' so far'+(b.waste_baits?' &middot; '+b.waste_baits+' returned as waste':'')+'</div>':'')
     +'<button class="btn-primary" id="btnBSave" style="width:100%;padding:13px;font-size:14px;">'+(b?"Save Changes":"Log Batch")+'</button></div></div>');
   var close=function(){var m=document.getElementById("mBatch");if(m)m.remove();};
   document.getElementById("mBClose").onclick=close;
   document.getElementById("mBatch").onclick=function(e){if(e.target===this)close();};
+  document.getElementById("bDate").onchange=function(){var u=batchUnitFor(this.value);document.getElementById("bIntro").innerHTML=introFor(u);document.getElementById("bQtyLbl").textContent=u==="bait"?"Baits Delivered":"Bags Made";};
   document.getElementById("btnBSave").onclick=function(){
     if(batchInFlight)return;
     var pid=parseInt(document.getElementById("bProd").value);
     var p=products.find(function(x){return x.id===pid;});
     var qty=parseInt(document.getElementById("bQty").value)||0;
-    var date=document.getElementById("bDate").value;
+    var date=document.getElementById("bDate").value,unit=batchUnitFor(date);
     if(!p){showToast("Pick a product","err");return;}
-    if(qty<=0){showToast("Enter bags made","err");return;}
+    if(qty<=0){showToast(unit==="bait"?"Enter baits delivered":"Enter bags made","err");return;}
     if(!date){showToast("Enter the date made","err");return;}
-    if(b&&qty<rec&&!confirm(rec+" bags from this batch are already received into inventory, which is more than "+qty+". Save anyway?"))return;
+    if(b&&unit!==(b.unit||"bag")&&(batchRecv[b.id]||b.waste_baits)){showToast("This batch already has receipts in "+(b.unit||"bag")+"s — keep its date on the same side of "+PER_BAIT_FROM,"err");return;}
+    var used=b?(unit==="bait"?(batchRecv[b.id]||0)*p.pack+(b.waste_baits||0):(batchRecv[b.id]||0)):0;
+    if(b&&qty<used&&!confirm(used+(unit==="bait"?" baits":" bags")+" from this batch are already "+(unit==="bait"?"bagged or returned":"received")+", which is more than "+qty+". Save anyway?"))return;
     var row={batch_date:date,product_id:p.id,product_name:p.name,color:p.color||"",qty:qty,batch_no:document.getElementById("bNo").value.trim(),made_by:document.getElementById("bMadeBy").value.trim(),note:document.getElementById("bNote").value.trim()};
+    if(unit==="bait")row.unit="bait"; // column added by 2026-10-21_loose_baits.sql; bag batches use its default
     var btn=document.getElementById("btnBSave");batchInFlight=true;btn.disabled=true;btn.textContent="Saving...";
     var req=b?dbPatch("production_batches","id=eq."+b.id,Object.assign(row,{edited_by:currentUser,edited_at:new Date().toISOString()}))
              :dbPost("production_batches",Object.assign(row,{id:Date.now()+(Math.random()*1000|0),entered_by:currentUser}));
-    req.then(function(){close();showToast(b?"Batch updated":"Logged "+qty+" × "+p.name+(p.color?" "+p.color:""));return loadBatches();})
+    req.then(function(){close();showToast(b?"Batch updated":"Logged "+qty+(unit==="bait"?" loose baits":" ×")+" "+p.name+(p.color?" "+p.color:""));return loadBatches();})
       .then(function(){render();})
       .catch(function(e){showToast("Error: "+e.message,"err");btn.disabled=false;btn.textContent=b?"Save Changes":"Log Batch";})
       .then(function(){batchInFlight=false;});
@@ -973,11 +990,12 @@ function batchModal(id){
 function batchListModal(){
   var list=batches.slice(0,60);
   var rows=list.length===0?'<div style="text-align:center;color:#94a3b8;padding:30px;">No batches logged yet</div>':list.map(function(b){
-    var rec=batchRecv[b.id]||0,left=b.qty-rec;
-    var st=left>0?'<span class="hist-badge" style="background:#fff7ed;color:#ea580c;">'+left+' open</span>':left<0?'<span class="hist-badge" style="background:#fef2f2;color:#dc2626;">over by '+(-left)+'</span>':'<span class="hist-badge" style="background:#dcfce7;color:#16a34a;">received</span>';
+    var bait=isBaitBatch(b),rec=batchBagged(b),left=batchLeft(b);
+    var st=left>0?'<span class="hist-badge" style="background:#fff7ed;color:#ea580c;">'+batchQtyLbl(b,left)+' '+(bait?'loose':'open')+'</span>':left<0?'<span class="hist-badge" style="background:#fef2f2;color:#dc2626;">over by '+batchQtyLbl(b,-left)+'</span>':'<span class="hist-badge" style="background:#dcfce7;color:#16a34a;">'+(bait?'closed':'received')+'</span>';
     return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">'+escHtml(b.product_name+(b.color?" — "+b.color:""))+' '+st+'</div>'
-      +'<div style="font-size:11px;color:#64748b;margin-top:3px;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; made '+b.qty+' &middot; received '+rec+'</div>'
-      +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Made by '+escHtml(b.made_by||"?")+' &middot; entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+(b.note?' &middot; '+escHtml(b.note):'')+'</div></div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:3px;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; '+(bait?'delivered '+b.qty+' baits &middot; bagged '+rec+' ('+(batchRecv[b.id]||0)+' bags)'+(b.waste_baits?' &middot; <span style="color:#7c3aed;">returned '+b.waste_baits+' as waste</span>':''):'made '+b.qty+' &middot; received '+rec)+'</div>'
+      +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Made by '+escHtml(b.made_by||"?")+' &middot; entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+(b.waste_date?' &middot; waste '+b.waste_date+' by '+escHtml(b.waste_by||"?"):'')+(b.note?' &middot; '+escHtml(b.note):'')+'</div>'
+      +(bait&&left>0?'<button class="btn-outline" data-bwaste="'+b.id+'" style="margin-top:6px;padding:5px 10px;font-size:11px;">&#x267B;&#xFE0F; Return '+left+' leftover to JCB as reusable waste</button>':'')+'</div>'
       +'<div style="display:flex;gap:5px;flex-shrink:0;"><button class="edit-btn" data-bedit="'+b.id+'">&#x270F;&#xFE0F;</button><button class="del-btn" data-bdel="'+b.id+'">&#x1F5D1;&#xFE0F;</button></div></div></div>';
   }).join("");
   document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mBatchList"><div class="modal sheet"><div class="modal-header"><div class="modal-title">PRODUCTION BATCHES</div><button class="close-btn" id="mBLClose">&times;</button></div><button class="btn-outline" id="btnBLNew" style="width:100%;margin-bottom:12px;">&#x1F9EA; Log Batch Made</button>'+rows+'</div></div>');
@@ -986,6 +1004,7 @@ function batchListModal(){
   document.getElementById("mBatchList").onclick=function(e){if(e.target===this)close();};
   document.getElementById("btnBLNew").onclick=function(){close();batchModal(null);};
   document.querySelectorAll("[data-bedit]").forEach(function(btn){btn.onclick=function(){close();batchModal(parseInt(btn.dataset.bedit));};});
+  document.querySelectorAll("[data-bwaste]").forEach(function(btn){btn.onclick=function(){close();wasteReturnModal(parseInt(btn.dataset.bwaste));};});
   document.querySelectorAll("[data-bdel]").forEach(function(btn){btn.onclick=function(){
     if(batchInFlight)return;
     var b=batches.find(function(x){return x.id===parseInt(btn.dataset.bdel);});if(!b)return;
@@ -999,10 +1018,39 @@ function batchListModal(){
   };});
 }
 
+// Loose baits the LLC didn't bag go back to JCB Manufacturing as reusable waste and are credited on the PO
+// (finance Transfers credits them in the month of waste_date). One return closes the batch.
+function wasteReturnModal(id){
+  var b=batches.find(function(x){return x.id===id;});if(!b||!isBaitBatch(b))return;
+  var left=batchLeft(b);if(left<=0){showToast("Nothing left in this batch","err");return;}
+  document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mWaste"><div class="modal sheet"><div class="modal-header"><div class="modal-title">RETURN TO JCB AS WASTE</div><button class="close-btn" id="mWClose">&times;</button></div>'
+    +'<div style="font-size:12px;font-weight:700;margin-bottom:4px;">'+escHtml(batchLabel(b))+'</div>'
+    +'<div style="font-size:11px;color:#64748b;margin-bottom:12px;">Delivered '+b.qty+' &middot; bagged '+batchBagged(b)+' &middot; <strong>'+left+' not bagged</strong>. These go back to JCB Manufacturing as reusable waste and are credited on the PO at $0.10/bait. If some of them went into custom orders, lower the number &mdash; those are already on the order.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Baits Returned</label><input class="field-input" type="number" min="1" max="'+left+'" id="wQty" value="'+left+'"/></div><div class="field-wrap"><label class="field-label">Date Returned</label><input class="field-input" type="date" id="wDate" value="'+localToday()+'"/></div></div>'
+    +'<div class="field-wrap"><label class="field-label">Note</label><input class="field-input" id="wNote" value="Reusable waste returned to JCB"/></div>'
+    +'<button class="btn-primary" id="btnWSave" style="width:100%;padding:13px;font-size:14px;">Return &amp; Close Batch</button></div></div>');
+  var close=function(){var m=document.getElementById("mWaste");if(m)m.remove();};
+  document.getElementById("mWClose").onclick=close;
+  document.getElementById("mWaste").onclick=function(e){if(e.target===this)close();};
+  document.getElementById("btnWSave").onclick=function(){
+    if(batchInFlight)return;
+    var n=parseInt(document.getElementById("wQty").value)||0,date=document.getElementById("wDate").value;
+    if(n<=0){showToast("Enter baits returned","err");return;}
+    if(!date){showToast("Enter the date returned","err");return;}
+    if(n>left&&!confirm("Only "+left+" baits are unbagged. Return "+n+" anyway?"))return;
+    var btn=this;batchInFlight=true;btn.disabled=true;btn.textContent="Saving...";
+    dbPatch("production_batches","id=eq."+b.id,{waste_baits:(b.waste_baits||0)+n,waste_date:date,waste_by:currentUser,waste_note:document.getElementById("wNote").value.trim()})
+      .then(function(){close();showToast(n+" baits returned to JCB as waste");return loadBatches();})
+      .then(function(){render();batchListModal();})
+      .catch(function(e){showToast("Error: "+e.message+(/waste/.test(e.message)?" — run supabase/sql/2026-10-21_loose_baits.sql":""),"err");btn.disabled=false;btn.textContent="Return & Close Batch";})
+      .then(function(){batchInFlight=false;});
+  };
+}
+
 function receiveProductionModal(){
   var prodOpts=products.map(function(p){return'<option value="'+p.id+'">'+escHtml(p.name+(p.color?' — '+p.color:''))+'</option>';}).join("");
   var ob=openBatches();
-  var batchField=batchesReady?'<div class="field-wrap"><label class="field-label">Batch</label><select class="field-input" id="rpBatch"><option value="">&mdash; No batch (not logged) &mdash;</option>'+ob.map(function(b){return'<option value="'+b.id+'">'+escHtml(batchLabel(b))+' · '+batchLeft(b)+' left</option>';}).join("")+'</select>'+(ob.length?'':'<div style="font-size:10px;color:#94a3b8;margin-top:4px;">No open batches. Log one with &ldquo;Log Batch Made&rdquo;.</div>')+'</div>':'';
+  var batchField=batchesReady?'<div class="field-wrap"><label class="field-label">Batch</label><select class="field-input" id="rpBatch"><option value="">&mdash; No batch (not logged) &mdash;</option>'+ob.map(function(b){return'<option value="'+b.id+'">'+escHtml(batchLabel(b))+' · '+(isBaitBatch(b)?batchLeft(b)+' loose baits (≈'+Math.floor(batchLeft(b)/batchPack(b))+' bags)':batchLeft(b)+' left')+'</option>';}).join("")+'</select>'+(ob.length?'':'<div style="font-size:10px;color:#94a3b8;margin-top:4px;">No open batches. Log one with &ldquo;Log Batch Made&rdquo;.</div>')+'</div>':'';
   document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mRecvProd"><div class="modal sheet"><div class="modal-header"><div class="modal-title">RECEIVE PRODUCTION</div><button class="close-btn" id="mRPClose">&times;</button></div>'+batchField+'<div class="field-wrap"><label class="field-label">Product</label><select class="field-input" id="rpProd">'+prodOpts+'</select></div><div class="field-wrap"><label class="field-label">Bags / Units Received</label><input class="field-input" type="number" min="1" id="rpQty" placeholder="e.g. 200"/></div><div class="field-wrap"><label class="field-label">Notes (optional)</label><input class="field-input" id="rpNote" placeholder="e.g. June 2026 run"/></div><button class="btn-primary" id="btnRPConfirm" style="width:100%;padding:13px;font-size:14px;">Add to Inventory</button></div></div>');
   document.getElementById("mRPClose").onclick=function(){document.getElementById("mRecvProd").remove();};
   document.getElementById("mRecvProd").onclick=function(e){if(e.target===this)this.remove();};
@@ -1011,7 +1059,7 @@ function receiveProductionModal(){
   if(selB)selB.onchange=function(){
     var b=pickedBatch(),ps=document.getElementById("rpProd");
     ps.disabled=!!b;
-    if(b){ps.value=String(b.product_id);document.getElementById("rpQty").value=batchLeft(b);}
+    if(b){ps.value=String(b.product_id);document.getElementById("rpQty").value=isBaitBatch(b)?Math.floor(batchLeft(b)/batchPack(b)):batchLeft(b);}
   };
   document.getElementById("btnRPConfirm").onclick=function(){
     var b=pickedBatch();
@@ -1020,7 +1068,8 @@ function receiveProductionModal(){
     var note=document.getElementById("rpNote").value.trim()||(b?"Batch "+(b.batch_no||b.batch_date):"Production received");
     if(qty<=0){showToast("Enter a quantity","err");return;}
     var p=products.find(function(x){return x.id===pid;});if(!p){showToast("Batch product no longer exists","err");return;}
-    if(b&&qty>batchLeft(b)&&!confirm("Batch "+(b.batch_no||"")+" only has "+batchLeft(b)+" bags left. Receive "+qty+" anyway?"))return;
+    if(b&&!isBaitBatch(b)&&qty>batchLeft(b)&&!confirm("Batch "+(b.batch_no||"")+" only has "+batchLeft(b)+" bags left. Receive "+qty+" anyway?"))return;
+    if(b&&isBaitBatch(b)&&qty*batchPack(b)>batchLeft(b)&&!confirm(qty+" bags × "+batchPack(b)+" = "+(qty*batchPack(b))+" baits, but batch "+(b.batch_no||"")+" only has "+batchLeft(b)+" loose baits left. Receive anyway?"))return;
     var before=p.qty,nq=before+qty;
     var btn=document.getElementById("btnRPConfirm");if(btn.disabled)return;btn.disabled=true;btn.textContent="Saving...";
     dbPatch("products","id=eq."+pid,{qty:nq}).then(function(){

@@ -99,6 +99,18 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   "Out"; fully returned orders are excluded as before. Returns use `change_type:"return"`, so they never show as
   possible production on the Transfers tab. Don't restock with "+".
 
+## Loose baits (from 2026-11-01, `PER_BAIT_FROM` in BOTH apps)
+- SQL: `supabase/sql/2026-10-21_loose_baits.sql` adds `production_batches.unit` ('bag'|'bait'), `waste_baits`, `waste_date`,
+  `waste_by`, `waste_note`. Batches dated on/after Nov 1 are `unit:"bait"` = loose baits JCB delivered (counted). Earlier = bags.
+  The app only sends `unit` for bait batches, so bag batches work even before the SQL runs. A batch can't switch sides of Nov 1.
+- Receive Production stays in BAGS; bagged baits = bags received × product pack (Paddle Tail 6, rest 8). Left = delivered −
+  bagged − waste. Batch list: "Return leftover to JCB as reusable waste" (`wasteReturnModal`, one return closes the batch;
+  number editable because custom-order bags taken from loose baits aren't batch-linked).
+- Finance Transfers: Loose Baits card (delivered / bagged / waste / loose). PO from Nov 1 = `linesFromLoose`: delivered baits in
+  the period @ $0.10 + credit line (qty positive, price −$0.10) for waste with `waste_date` in the period. Bait-batch bag
+  receipts are excluded from `receivedByProduct`, and Custom orders dated ≥ Nov 1 are excluded from `linesFromCustom` (already
+  billed as loose baits). Loose line cost = (cost profile − `BAG_COST`) / pack. PO lines now save `custom/baits/loose/credit`.
+
 ## Intercompany transfers
 - Inventory app Stock tab: **Log Batch Made** (no stock change) + **Receive Production** (batch picker fills product +
   remaining qty, saves `history.batch_id`). "Recent batches" link → list with edit/delete. History filter has `production`.
@@ -318,3 +330,8 @@ with the code. Update the sections above if architecture changed.
   bags and labels). profit.html: `firstSalePrice` / `getItemExcise` / `getItemCOGS` / `poPriceFor` take a date; 8-bait bag
   $0.08 excise (was $0.11), Paddle Tail $0.06, Creek Box $0.74, Season Box $1.14. Thomas chose a start date over restating
   history. Open: Intercompany PO lines should become loose baits (qty in baits, cost excl. bag) — waiting on Thomas.
+- **2026-10-21 (loose baits)** — Thomas: from Nov 1 JCB delivers LOOSE baits (counted); the LLC picks, bags, labels and supplies
+  packaging; unbagged leftovers go back to JCB as reusable waste and are CREDITED on the PO. Built per the "Loose baits" section
+  (inventory batch modal/list/receive + waste return; finance Loose Baits card, loose PO lines + waste credit). Simulated test:
+  1,600 delivered, 150 bags, 400 waste → PO $120.00, excise $12.00; October PO unchanged. Also fixed: saved PO lines dropped
+  `custom/baits`, so Refresh qty couldn't match custom lines after reload. SQL file waiting for Thomas to run.
