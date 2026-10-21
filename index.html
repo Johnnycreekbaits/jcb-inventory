@@ -1018,14 +1018,14 @@ function batchListModal(){
   };});
 }
 
-// Loose baits the LLC didn't bag go back to JCB Manufacturing as reusable waste and are credited on the PO
-// (finance Transfers credits them in the month of waste_date). One return closes the batch.
+// Loose baits the LLC didn't bag go back to JCB Manufacturing as reusable waste. They were never sold (POs bill baits as
+// they're bagged), so no PO line and no excise. One return closes the batch.
 function wasteReturnModal(id){
   var b=batches.find(function(x){return x.id===id;});if(!b||!isBaitBatch(b))return;
   var left=batchLeft(b);if(left<=0){showToast("Nothing left in this batch","err");return;}
   document.body.insertAdjacentHTML("beforeend",'<div class="overlay bottom" id="mWaste"><div class="modal sheet"><div class="modal-header"><div class="modal-title">RETURN TO JCB AS WASTE</div><button class="close-btn" id="mWClose">&times;</button></div>'
     +'<div style="font-size:12px;font-weight:700;margin-bottom:4px;">'+escHtml(batchLabel(b))+'</div>'
-    +'<div style="font-size:11px;color:#64748b;margin-bottom:12px;">Delivered '+b.qty+' &middot; bagged '+batchBagged(b)+' &middot; <strong>'+left+' not bagged</strong>. These go back to JCB Manufacturing as reusable waste and are credited on the PO at $0.10/bait. If some of them went into custom orders, lower the number &mdash; those are already on the order.</div>'
+    +'<div style="font-size:11px;color:#64748b;margin-bottom:12px;">Delivered '+b.qty+' &middot; bagged '+batchBagged(b)+' &middot; <strong>'+left+' not bagged</strong>. These go back to JCB Manufacturing as reusable waste &mdash; never sold, so they&rsquo;re not billed and carry no excise. If some of them went into custom orders, lower the number &mdash; those are already on the order.</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Baits Returned</label><input class="field-input" type="number" min="1" max="'+left+'" id="wQty" value="'+left+'"/></div><div class="field-wrap"><label class="field-label">Date Returned</label><input class="field-input" type="date" id="wDate" value="'+localToday()+'"/></div></div>'
     +'<div class="field-wrap"><label class="field-label">Note</label><input class="field-input" id="wNote" value="Reusable waste returned to JCB"/></div>'
     +'<button class="btn-primary" id="btnWSave" style="width:100%;padding:13px;font-size:14px;">Return &amp; Close Batch</button></div></div>');

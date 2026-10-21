@@ -106,10 +106,13 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - Receive Production stays in BAGS; bagged baits = bags received × product pack (Paddle Tail 6, rest 8). Left = delivered −
   bagged − waste. Batch list: "Return leftover to JCB as reusable waste" (`wasteReturnModal`, one return closes the batch;
   number editable because custom-order bags taken from loose baits aren't batch-linked).
-- Finance Transfers: Loose Baits card (delivered / bagged / waste / loose). PO from Oct 21 = `linesFromLoose`: delivered baits in
-  the period @ $0.10 + credit line (qty positive, price −$0.10) for waste with `waste_date` in the period. Bait-batch bag
-  receipts are excluded from `receivedByProduct`, and Custom orders dated ≥ Oct 21 are excluded from `linesFromCustom` (already
-  billed as loose baits). Loose line cost = (cost profile − `BAG_COST`) / pack. PO lines now save `custom/baits/loose/credit`.
+- Finance Transfers: Loose Baits card (delivered / bagged / waste / loose). Loose baits are billed WHEN BAGGED (Thomas,
+  2026-10-21): `linesFromLoose(hist)` = bags received from bait batches in the period × pack @ $0.10. Unbagged leftovers
+  returned to JCB as reusable waste were never sold: no PO line, no excise. `receivedByProduct` skips bait-batch receipts
+  (they'd be priced per bag). Custom orders from Oct 21 are billed in `linesFromCustom` at $0.10 × baits per bag (they come
+  from loose baits and never pass Receive Production); lines carry `era` (pricing date) so a period spanning the switch
+  prices each side right. Credit lines (price −$0.10, `credit:true`) still work for manual adjustments. Loose line cost =
+  (cost profile − `BAG_COST`) / pack. PO lines save `custom/baits/era/loose/credit`.
 
 ## Intercompany transfers
 - Inventory app Stock tab: **Log Batch Made** (no stock change) + **Receive Production** (batch picker fills product +
@@ -342,3 +345,8 @@ with the code. Update the sections above if architecture changed.
 - **2026-10-21 (start date)** — Loose baits / $0.10-per-bait start moved from 2026-11-01 to **2026-10-21** (`PER_BAIT_FROM` in both apps): Thomas's team delivered and bagged two batches today. Checked first: no batches, receipts, orders or POs on/after Oct 21, so nothing restated.
 - **2026-10-21 (20% markup)** — First sale for XG8 / Walker / Kanji Ball = cost + 20% from Oct 21 (was cost × 1.642, the old
   soft-plastic ratio). XG8 excise $7.10 → $5.19. 400 past order lines verified unchanged. Costs tab shows the from-date price.
+- **2026-10-21 (excise positions + bill-when-bagged)** — Thomas's positions on the accountant questions: (1) JCB → LLC
+  pricing is fine as long as it's arm's length; (2) the LLC's picking/bagging/labeling is its service (why it gets its
+  pricing), not manufacturing; (3) unbagged baits returned to JCB as waste are never sold → no sale, no excise. So POs now
+  bill loose baits when bagged instead of on delivery + waste credit. Simulated Oct/Nov: Oct $120.50 (excise $12.05), Nov
+  $46.00 ($4.60); 1,200 of 1,600 delivered billed (400 returned never billed).

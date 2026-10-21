@@ -768,8 +768,9 @@ function fetchHist(start,end){
   return dbGet("history","?select=id,product_id,product_name,color,change_type,qty_before,qty_after,changed_by,note,changed_at,batch_id&order=changed_at.asc&changed_at=gte."+encodeURIComponent(localStart(start).toISOString())+"&changed_at=lt."+encodeURIComponent(dayAfter(end).toISOString()))
     .then(function(rows){trHistCache[key]=rows;return rows;});
 }
-// Loose-bait batches (unit "bait", logged from PER_BAIT_FROM): JCB bills the baits it DELIVERED, so their bag receipts
-// never go on the PO again. bagged = bags received from the batch × baits per bag; leftovers return as waste (credited).
+// Loose-bait batches (unit "bait", logged from PER_BAIT_FROM): their bag receipts are billed per BAIT by linesFromLoose,
+// so receivedByProduct (per-bag pricing) skips them. bagged = bags received × baits per bag; unbagged leftovers go back to
+// JCB as reusable waste and are never billed.
 function isBaitBatch(b){return !!b&&b.unit==="bait";}
 function batchPackOf(b){var p=products.find(function(x){return x.id===b.product_id;});return p&&p.pack>0?p.pack:8;}
 function baggedBaits(b){return(batchRecvAll[b.id]||0)*batchPackOf(b);}
@@ -809,7 +810,7 @@ function trHTML(){
   var kpis='<div class="kpi-grid"><div class="kpi" style="background:#faf5ff;border:2px solid #c4b5fd;"><div class="kpi-val" style="color:#7c3aed;">'+tMade+'</div><div class="kpi-lbl">Bags Produced</div></div><div class="kpi" style="background:#f0fdf4;border:2px solid #86efac;"><div class="kpi-val" style="color:#16a34a;">'+tRecv+'</div><div class="kpi-lbl">Bags Received</div></div></div>';
   // Loose baits delivered this month: delivered vs bagged vs returned as reusable waste
   var lt={d:0,b:0,w:0,l:0};
-  var looseHTML=lb.length===0?'':'<div class="card" style="border:1px solid #c4b5fd;"><div style="font-weight:700;font-size:13px;margin-bottom:2px;">&#x1FAB1; Loose Baits &middot; '+monthLabel(trMonth)+'</div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Delivered by JCB at $'+PER_BAIT_RATE.toFixed(2)+'/bait &middot; bagged = bags received &times; baits per bag &middot; waste = returned to JCB (credited on the PO)</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.05em;"><th style="text-align:left;padding:6px 4px;">Batch</th><th style="text-align:right;padding:6px 4px;">Delivered</th><th style="text-align:right;padding:6px 4px;">Bagged</th><th style="text-align:right;padding:6px 4px;">Waste</th><th style="text-align:right;padding:6px 4px;">Loose</th></tr></thead><tbody>'
+  var looseHTML=lb.length===0?'':'<div class="card" style="border:1px solid #c4b5fd;"><div style="font-weight:700;font-size:13px;margin-bottom:2px;">&#x1FAB1; Loose Baits &middot; '+monthLabel(trMonth)+'</div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Delivered by JCB at $'+PER_BAIT_RATE.toFixed(2)+'/bait &middot; bagged = bags received &times; baits per bag (this is what the PO bills) &middot; waste = returned to JCB, never sold, not billed</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.05em;"><th style="text-align:left;padding:6px 4px;">Batch</th><th style="text-align:right;padding:6px 4px;">Delivered</th><th style="text-align:right;padding:6px 4px;">Bagged</th><th style="text-align:right;padding:6px 4px;">Waste</th><th style="text-align:right;padding:6px 4px;">Loose</th></tr></thead><tbody>'
     +lb.map(function(b){var bg=baggedBaits(b),w=b.waste_baits||0,l=looseLeft(b);lt.d+=b.qty;lt.b+=bg;lt.w+=w;lt.l+=l;return'<tr style="border-top:1px solid #f1f5f9;"><td style="padding:7px 4px;">'+prodLabel(b.product_name,b.color)+'<div style="font-size:10px;color:#94a3b8;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+'</div></td><td style="text-align:right;padding:7px 4px;">'+b.qty+'</td><td style="text-align:right;padding:7px 4px;">'+bg+'</td><td style="text-align:right;padding:7px 4px;color:#7c3aed;">'+(w||"")+'</td><td style="text-align:right;padding:7px 4px;font-weight:700;color:'+(l===0?"#16a34a":l>0?"#d97706":"#dc2626")+';">'+l+'</td></tr>';}).join("")
     +'</tbody><tfoot><tr style="border-top:2px solid #e2e8f0;font-weight:700;"><td style="padding:8px 4px;">Total</td><td style="text-align:right;padding:8px 4px;">'+lt.d+'</td><td style="text-align:right;padding:8px 4px;">'+lt.b+'</td><td style="text-align:right;padding:8px 4px;color:#7c3aed;">'+lt.w+'</td><td style="text-align:right;padding:8px 4px;">'+lt.l+'</td></tr></tfoot></table><div style="font-size:10px;color:#94a3b8;margin-top:6px;">Loose &gt; 0 = still to bag, or return as waste from the inventory app&rsquo;s batch list &middot; Loose &lt; 0 = more bagged than delivered</div></div>';
   // Open batches (any month)
@@ -911,31 +912,35 @@ function linesFromCustom(start,end,markup){
   var m={};
   logs.forEach(function(l){
     if(l.ch!=="Custom"||!l.date||l.date<start||l.date>end)return;
-    if(l.date>=PER_BAIT_FROM)return; // from then JCB bills the loose baits on delivery (linesFromLoose)
-    parseItems(l.items).forEach(function(i){if(!i.baits)return;var k=i.pid+"|"+i.baits;if(!m[k])m[k]={pid:i.pid,baits:i.baits,qty:0};m[k].qty+=i.qty;});
+    // From PER_BAIT_FROM these bags come from loose baits that never pass Receive Production, so they're billed here
+    // at $0.10 × baits per bag; split by era so a period spanning the switch prices each side correctly.
+    var era=l.date>=PER_BAIT_FROM?PER_BAIT_FROM:start;
+    parseItems(l.items).forEach(function(i){if(!i.baits)return;var k=i.pid+"|"+i.baits+"|"+era;if(!m[k])m[k]={pid:i.pid,baits:i.baits,qty:0,date:era};m[k].qty+=i.qty;});
   });
-  return Object.keys(m).map(function(k){return makeLine(m[k].pid,m[k].qty,markup,m[k].baits);}).sort(function(a,b){return(a.name+a.color).localeCompare(b.name+b.color);});
+  return Object.keys(m).map(function(k){var ln=makeLine(m[k].pid,m[k].qty,markup,m[k].baits,m[k].date);ln.era=m[k].date;return ln;}).sort(function(a,b){return(a.name+a.color).localeCompare(b.name+b.color);});
 }
 function linesFromReceived(rec,markup){
   return Object.keys(rec).map(function(k){var pid=parseInt(k);var p=products.find(function(x){return x.id===pid;});if(trSkip(p)||rec[k].qty<=0)return null;return makeLine(pid,rec[k].qty,markup);})
     .filter(Boolean).sort(function(a,b){return(a.name+a.color).localeCompare(b.name+b.color);});
 }
-// Loose baits: one line per product for baits DELIVERED in the period at $0.10, and a credit line (price −$0.10) for baits
-// returned to JCB as reusable waste in the period. Cost = production cost per bait (the bag is the LLC's now).
+// Loose baits are billed WHEN BAGGED: bags received from a loose-bait batch in the period × baits per bag, at $0.10.
+// Unbagged baits returned to JCB as reusable waste are never sold, so they never reach a PO (no sale, no excise — Thomas).
+// Credit lines (price −$0.10) are still supported for a manual adjustment. Cost = production cost per bait (bag is the LLC's).
 function baitCostFor(pid){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);if(!cp||!p)return null;var pk=p.pack>0?p.pack:8;return Math.round(Math.max(0,Number(cp.cogs)-BAG_COST)/pk*10000)/10000;}
 function looseLine(pid,qty,credit){
   var p=products.find(function(x){return x.id===pid;})||{};
   return{pid:pid,name:(p.name||"")+(credit?" — reusable waste returned to JCB (credit)":" (loose baits)"),color:p.color||"",series:p.series||"",qty:qty,cost:baitCostFor(pid),price:credit?-PER_BAIT_RATE:PER_BAIT_RATE,loose:true,credit:!!credit};
 }
-function linesFromLoose(start,end){
-  var del={},waste={};
-  batches.forEach(function(b){
-    if(!isBaitBatch(b))return;
-    if(b.batch_date>=start&&b.batch_date<=end)del[b.product_id]=(del[b.product_id]||0)+b.qty;
-    if(b.waste_baits&&b.waste_date&&b.waste_date>=start&&b.waste_date<=end)waste[b.product_id]=(waste[b.product_id]||0)+b.waste_baits;
+function linesFromLoose(hist){
+  var byId={},baits={};
+  batches.forEach(function(b){if(isBaitBatch(b))byId[b.id]=b;});
+  hist.forEach(function(h){
+    var b=byId[h.batch_id];if(h.change_type!=="production"||!b)return;
+    var bags=(h.qty_after||0)-(h.qty_before||0);if(!bags)return;
+    baits[b.product_id]=(baits[b.product_id]||0)+bags*batchPackOf(b);
   });
-  var out=Object.keys(del).map(function(k){return looseLine(parseInt(k),del[k],false);}).concat(Object.keys(waste).map(function(k){return looseLine(parseInt(k),waste[k],true);}));
-  return out.sort(function(a,b){return(a.name+a.color).localeCompare(b.name+b.color);});
+  return Object.keys(baits).filter(function(k){return baits[k]>0;}).map(function(k){return looseLine(parseInt(k),baits[k],false);})
+    .sort(function(a,b){return(a.name+a.color).localeCompare(b.name+b.color);});
 }
 function poTotal(d){return round2(d.lines.reduce(function(s,l){return s+(Number(l.qty)||0)*(Number(l.price)||0);},0));}
 
@@ -946,7 +951,7 @@ function newPO(){
   fetchHist(r.start,r.end).then(function(hist){
     poDraft={id:null,po_number:nextPONumber(),po_date:localDateStr(new Date()),period_start:r.start,period_end:r.end,status:"Draft",markup_pct:mk,
       vendor_name:lp?lp.vendor_name:"JCB Manufacturing",vendor_address:lp?lp.vendor_address:"",buyer_name:lp?lp.buyer_name:"Johnny Creek Baits, LLC",buyer_address:lp?lp.buyer_address:"",
-      terms:"Net 30",notes:PO_DEFAULT_NOTE,paid_date:null,lines:linesFromReceived(receivedByProduct(hist),mk).concat(linesFromCustom(r.start,r.end,mk),linesFromLoose(r.start,r.end))};
+      terms:"Net 30",notes:PO_DEFAULT_NOTE,paid_date:null,lines:linesFromReceived(receivedByProduct(hist),mk).concat(linesFromCustom(r.start,r.end,mk),linesFromLoose(hist))};
     openPOEditor();
   }).catch(function(e){showToast("Error: "+e.message,"err");});
 }
@@ -1013,7 +1018,7 @@ function wirePOEditor(){
     var n=0,skipped=0;
     d.lines.forEach(function(l){
       if(l.loose){l.cost=baitCostFor(l.pid);l.price=l.credit?-PER_BAIT_RATE:PER_BAIT_RATE;n++;return;}
-      var c=l.pid!=null?unitCostFor(l.pid,l.baits):null;if(c==null){skipped++;return;}l.cost=c;l.price=poPriceFor(l.pid,c,d.markup_pct,l.baits,d.po_date);n++;});
+      var c=l.pid!=null?unitCostFor(l.pid,l.baits):null;if(c==null){skipped++;return;}l.cost=c;l.price=poPriceFor(l.pid,c,d.markup_pct,l.baits,l.era||d.po_date);n++;});
     renderPOEditor();showToast("Re-priced "+n+" lines at "+d.markup_pct+"%"+(skipped?" ("+skipped+" without cost left as-is)":""));
   };
   document.getElementById("poRefresh").onclick=function(){
@@ -1022,12 +1027,12 @@ function wirePOEditor(){
     fetchHist(d.period_start,d.period_end).then(function(hist){
       if(poDraft!==d)return;
       var rec=receivedByProduct(hist),changed=0,added=0;
-      var cust={};linesFromCustom(d.period_start,d.period_end,d.markup_pct).forEach(function(nl){cust[nl.pid+"|"+nl.baits]=nl;});
-      var loose={};linesFromLoose(d.period_start,d.period_end).forEach(function(nl){loose[nl.pid+"|"+(nl.credit?"c":"d")]=nl;});
-      d.lines.forEach(function(l){var q=l.loose?(loose[l.pid+"|"+(l.credit?"c":"d")]?loose[l.pid+"|"+(l.credit?"c":"d")].qty:0):l.custom?(cust[l.pid+"|"+l.baits]?cust[l.pid+"|"+l.baits].qty:0):(rec[l.pid]?Math.max(0,rec[l.pid].qty):0);if(l.qty!==q){l.qty=q;changed++;}});
+      var cust={};linesFromCustom(d.period_start,d.period_end,d.markup_pct).forEach(function(nl){cust[nl.pid+"|"+nl.baits+"|"+nl.era]=nl;});
+      var loose={};linesFromLoose(hist).forEach(function(nl){loose[nl.pid+"|"+(nl.credit?"c":"d")]=nl;});
+      d.lines.forEach(function(l){var q=l.loose?(loose[l.pid+"|"+(l.credit?"c":"d")]?loose[l.pid+"|"+(l.credit?"c":"d")].qty:0):l.custom?(cust[l.pid+"|"+l.baits+"|"+l.era]?cust[l.pid+"|"+l.baits+"|"+l.era].qty:0):(rec[l.pid]?Math.max(0,rec[l.pid].qty):0);if(l.qty!==q){l.qty=q;changed++;}});
       linesFromReceived(rec,d.markup_pct).forEach(function(nl){if(!d.lines.some(function(l){return !l.custom&&!l.loose&&l.pid===nl.pid;})){d.lines.push(nl);added++;}});
       Object.keys(loose).forEach(function(k){var nl=loose[k];if(!d.lines.some(function(l){return l.loose&&l.pid===nl.pid&&!!l.credit===nl.credit;})){d.lines.push(nl);added++;}});
-      Object.keys(cust).forEach(function(k){var nl=cust[k];if(!d.lines.some(function(l){return l.custom&&l.pid===nl.pid&&l.baits===nl.baits;})){d.lines.push(nl);added++;}});
+      Object.keys(cust).forEach(function(k){var nl=cust[k];if(!d.lines.some(function(l){return l.custom&&l.pid===nl.pid&&l.baits===nl.baits&&l.era===nl.era;})){d.lines.push(nl);added++;}});
       renderPOEditor();showToast("Qty refreshed: "+changed+" changed, "+added+" added");
     }).catch(function(e){showToast("Error: "+e.message,"err");btn.disabled=false;btn.textContent="Refresh qty from inventory";});
   };
@@ -1042,7 +1047,7 @@ function wirePOEditor(){
       vendor_name:d.vendor_name||"",vendor_address:d.vendor_address||"",buyer_name:d.buyer_name||"",buyer_address:d.buyer_address||"",terms:d.terms||"",notes:d.notes||"",
       lines:d.lines.map(function(l){var o={pid:l.pid,name:l.name,color:l.color,series:l.series,qty:Number(l.qty)||0,cost:l.cost,price:round2(l.price)};
         // keep line kinds so Refresh/Re-price still recognise them after a reload
-        if(l.custom){o.custom=true;o.baits=l.baits;}if(l.loose){o.loose=true;if(l.credit)o.credit=true;}return o;}),
+        if(l.custom){o.custom=true;o.baits=l.baits;if(l.era)o.era=l.era;}if(l.loose){o.loose=true;if(l.credit)o.credit=true;}return o;}),
       total:poTotal(d),paid_date:d.paid_date||null,updated_by:currentUser,updated_at:now};
     var btn=this;trInFlight=true;btn.disabled=true;btn.textContent="Saving...";
     var req=d.id?dbPatch("transfer_pos","id=eq."+d.id,row):dbPost("transfer_pos",Object.assign(row,{id:Date.now()+(Math.random()*1000|0),created_by:currentUser,created_at:now}));
