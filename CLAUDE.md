@@ -336,3 +336,4 @@ with the code. Update the sections above if architecture changed.
   1,600 delivered, 150 bags, 400 waste → PO $120.00, excise $12.00; October PO unchanged. Also fixed: saved PO lines dropped
   `custom/baits`, so Refresh qty couldn't match custom lines after reload. SQL file waiting for Thomas to run.
   Pushed + `shopify-order` deployed 2026-10-21 (Thomas). Loose-baits SQL still to be run by Thomas in the SQL editor.
+  Loose-baits SQL run by Thomas 2026-10-21; columns verified via REST.
