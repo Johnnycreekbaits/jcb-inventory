@@ -176,15 +176,28 @@ function bagCOGS(cp,prod,baits){
 // = that transfer price per unit (soft plastics $1.10/bag). Custom-size bags prorate by bait count. Not set → no excise.
 var EXCISE_RATE=0.10,EXCISE_CAT="Federal Excise Tax",NO_EXCISE_SERIES=["Apparel"];
 function hasFirstSale(cp){return !!cp&&cp.first_sale!=null&&cp.first_sale!==""&&!isNaN(Number(cp.first_sale));}
-function firstSalePrice(cp,prod,baits){
-  if(!hasFirstSale(cp)||NO_EXCISE_SERIES.indexOf(cp.series)>=0)return 0;
+// From PER_BAIT_FROM, JCB Manufacturing charges the LLC $0.10 per soft-plastic bait (bags hold different counts), so the
+// first sale = rate × baits in the unit. Before that date cost_profiles.first_sale ($1.10/bag) still applies, so past
+// months don't restate. Pass the order/PO date; no date = today.
+var PER_BAIT_RATE=0.10,PER_BAIT_FROM="2026-11-01";
+var PER_BAIT_SERIES=["Baby Hawgs","Craws","Finesse Worms","Nekos","Stick Baits","Soft Jerk","Terp Minnow","Paddle Tail"];
+var BUNDLE_BAITS={"variety-pack":56,"creek-box":74,"season-box":114}; // fixed mixes; Paddle Tail bags hold 6, the rest 8
+function perBaitCount(cp,prod,baits){
+  if(BUNDLE_BAITS[cp.id])return BUNDLE_BAITS[cp.id];
+  if(PER_BAIT_SERIES.indexOf(cp.series)<0)return 0;
+  return baits||(prod&&prod.pack>0?prod.pack:0);
+}
+function firstSalePrice(cp,prod,baits,date){
+  if(!cp||NO_EXCISE_SERIES.indexOf(cp.series)>=0)return 0;
+  if((date||localDateStr(new Date()))>=PER_BAIT_FROM){var n=perBaitCount(cp,prod,baits);if(n)return PER_BAIT_RATE*n;}
+  if(!hasFirstSale(cp))return 0;
   var fs=Number(cp.first_sale),pack=prod&&prod.pack>1?prod.pack:0;
   if(baits&&pack&&baits!==pack&&cp.unit==="bag")fs=fs*baits/pack;
   return fs;
 }
-function getItemExcise(qty,prod,baits){var cp=matchCostProfile(prod);return cp?EXCISE_RATE*firstSalePrice(cp,prod,baits)*qty:0;}
+function getItemExcise(qty,prod,baits,date){var cp=matchCostProfile(prod);return cp?EXCISE_RATE*firstSalePrice(cp,prod,baits,date)*qty:0;}
 // COGS = production cost (BOM, no excise) + excise, so every margin includes the tax
-function getItemCOGS(qty,prod,baits){var cp=matchCostProfile(prod);return cp?bagCOGS(cp,prod,baits)*qty+getItemExcise(qty,prod,baits):0;}
+function getItemCOGS(qty,prod,baits,date){var cp=matchCostProfile(prod);return cp?bagCOGS(cp,prod,baits)*qty+getItemExcise(qty,prod,baits,date):0;}
 function isInvoiceCh(ch){return ch==="Dealer"||ch==="Distro"||ch==="Custom";}
 function calcInventoryValue(){var total=0;products.forEach(function(p){if(p.series==="Bundles")return;var cp=matchCostProfile(p);if(cp)total+=p.qty*cp.cogs;});return total;}
 function calcAccountsReceivable(){
@@ -225,13 +238,13 @@ function calcOrderLines(log,prods){
       var p=prods.find(function(x){return x.id===item.pid;});
       var q=net(item.pid,item.qty);
       lines.push({name:item.name||(p&&p.name)||"Item",color:item.color||(p&&p.color)||"",qty:q,returned:(item.qty||0)-q,baits:item.baits,
-        price:item.price||0,rev:q*(item.price||0),cogs:getItemCOGS(q,p,item.baits),excise:getItemExcise(q,p,item.baits)});
+        price:item.price||0,rev:q*(item.price||0),cogs:getItemCOGS(q,p,item.baits,log.date),excise:getItemExcise(q,p,item.baits,log.date)});
     });
   }else{
     var p=prods.find(function(x){return x.id===log.pid;});
     var q=net(log.pid,log.qty);
     var price=getChannelPrice(p||{price:log.price||0,pack:8},log.ch||"Retail");
-    lines.push({name:p?p.name:"Item",color:p?p.color:"",qty:q,returned:(log.qty||0)-q,price:price,rev:q*price,cogs:getItemCOGS(q,p),excise:getItemExcise(q,p)});
+    lines.push({name:p?p.name:"Item",color:p?p.color:"",qty:q,returned:(log.qty||0)-q,price:price,rev:q*price,cogs:getItemCOGS(q,p,undefined,log.date),excise:getItemExcise(q,p,undefined,log.date)});
   }
   return lines;
 }
@@ -480,7 +493,7 @@ function prodHTML(){
         var key=cp?cp.id:(p?p.name:"unknown");
         if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:"Unknown"),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
         byType[key].qty+=item.qty;
-        byType[key].cogs+=getItemCOGS(item.qty,p||null,item.baits);
+        byType[key].cogs+=getItemCOGS(item.qty,p||null,item.baits,l.date);
         byType[key].rev+=item.qty*(item.price||0);
         if(!byType[key].channels[ch])byType[key].channels[ch]=0;
         byType[key].channels[ch]+=item.qty;
@@ -492,7 +505,7 @@ function prodHTML(){
       var lq=net(l.pid,l.qty);if(!lq)return;
       if(!byType[key])byType[key]={name:cp?cp.name:(p?p.name:"Unknown"),unit:cp?cp.unit:"bag",qty:0,cogs:0,rev:0,channels:{}};
       byType[key].qty+=lq;
-      byType[key].cogs+=getItemCOGS(lq,p||null);
+      byType[key].cogs+=getItemCOGS(lq,p||null,undefined,l.date);
       byType[key].rev+=lq*getChannelPrice(p||{price:l.price||0,pack:8},ch); // legacy no-items orders
       if(!byType[key].channels[ch])byType[key].channels[ch]=0;
       byType[key].channels[ch]+=lq;
@@ -560,7 +573,7 @@ function expHTML(){
 function costsHTML(){
   var rows=costProfiles.map(function(cp,i){
     return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">'+cp.name+'</div><div style="font-size:10px;color:#94a3b8;margin-top:1px;">per '+cp.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;"><span style="color:#94a3b8;font-weight:600;font-size:13px;">$</span><input type="number" step="0.01" min="0" value="'+cp.cogs.toFixed(2)+'" data-cpidx="'+i+'" class="cp-inp" style="width:84px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#1e293b;font-family:\'DM Sans\',sans-serif;outline:none;"/><button class="del-btn" data-delcp="'+i+'">&#x2715;</button></div></div>'
-      +(NO_EXCISE_SERIES.indexOf(cp.series)>=0?'':'<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:-4px 0 8px;font-size:10px;color:#94a3b8;">First sale to LLC (excise base) $<input type="number" step="0.01" min="0" value="'+(hasFirstSale(cp)?Number(cp.first_sale).toFixed(2):"")+'" placeholder="not set" data-fsidx="'+i+'" class="fs-inp" style="width:70px;background:#f8fafc;border:1px solid '+(hasFirstSale(cp)?"#e2e8f0":"#fca5a5")+';border-radius:8px;padding:4px 6px;font-size:12px;font-weight:700;text-align:right;"/>'+(hasFirstSale(cp)?' <span style="color:#7c3aed;font-weight:700;">excise '+fmt$(EXCISE_RATE*Number(cp.first_sale))+'</span>':'')+'</div>');
+      +(NO_EXCISE_SERIES.indexOf(cp.series)>=0?'':(perBaitCount(cp,null,0)||PER_BAIT_SERIES.indexOf(cp.series)>=0?'<div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#7c3aed;font-weight:600;">From '+PER_BAIT_FROM+': $'+PER_BAIT_RATE.toFixed(2)+'/bait'+(BUNDLE_BAITS[cp.id]?' &times; '+BUNDLE_BAITS[cp.id]+' baits = $'+(PER_BAIT_RATE*BUNDLE_BAITS[cp.id]).toFixed(2):' &times; baits in the bag (8-bait bag $'+(PER_BAIT_RATE*8).toFixed(2)+')')+' &middot; before: price below</div>':'')+'<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:-4px 0 8px;font-size:10px;color:#94a3b8;">First sale to LLC (excise base) $<input type="number" step="0.01" min="0" value="'+(hasFirstSale(cp)?Number(cp.first_sale).toFixed(2):"")+'" placeholder="not set" data-fsidx="'+i+'" class="fs-inp" style="width:70px;background:#f8fafc;border:1px solid '+(hasFirstSale(cp)?"#e2e8f0":"#fca5a5")+';border-radius:8px;padding:4px 6px;font-size:12px;font-weight:700;text-align:right;"/>'+(hasFirstSale(cp)?' <span style="color:#7c3aed;font-weight:700;">excise '+fmt$(EXCISE_RATE*Number(cp.first_sale))+'</span>':'')+'</div>');
   }).join("");
   return'<div class="section-title">COST PROFILES</div><div class="section-sub">Cost to produce per unit (no excise) &middot; first-sale price = what JCB Manufacturing charges Johnny Creek Baits; excise is 10% of it &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
 }
@@ -604,7 +617,7 @@ function reportHTML(){
         byProduct[key].units+=item.qty;
         if(isSponsor)byProduct[key].sponsorUnits+=item.qty;
         byProduct[key].rev+=item.qty*(item.price||0);
-        byProduct[key].cogs+=getItemCOGS(item.qty,p,item.baits);
+        byProduct[key].cogs+=getItemCOGS(item.qty,p,item.baits,l.date);
       });
     }else{
       var p=products.find(function(x){return x.id===l.pid;});
@@ -613,7 +626,7 @@ function reportHTML(){
       byProduct[key].units+=l.qty;
       if(isSponsor)byProduct[key].sponsorUnits+=l.qty;
       byProduct[key].rev+=l.qty*(l.price||0);
-      byProduct[key].cogs+=getItemCOGS(l.qty,p);
+      byProduct[key].cogs+=getItemCOGS(l.qty,p,undefined,l.date);
     }
   });
 
@@ -865,11 +878,11 @@ function nextPONumber(){var mx=0;pos.forEach(function(p){var m=String(p.po_numbe
 function unitCostFor(pid,baits){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);return cp?round2(bagCOGS(cp,p,baits)):null;}
 function priceAt(cost,markup){return cost==null?0:round2(cost*(1+(Number(markup)||0)/100));}
 // PO unit price: the product's first-sale price when set (that's the excise base), else cost + markup
-function poPriceFor(pid,cost,markup,baits){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);return hasFirstSale(cp)?round2(firstSalePrice(cp,p,baits)):priceAt(cost,markup);}
+function poPriceFor(pid,cost,markup,baits,date){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);var fs=cp?firstSalePrice(cp,p,baits,date):0;return fs>0?round2(fs):priceAt(cost,markup);}
 function poExcise(d){return round2(d.lines.reduce(function(s,l){var p=products.find(function(x){return x.id===l.pid;});if(p&&NO_EXCISE_SERIES.indexOf(p.series)>=0)return s;return s+EXCISE_RATE*(Number(l.qty)||0)*(Number(l.price)||0);},0));}
-function makeLine(pid,qty,markup,baits){
+function makeLine(pid,qty,markup,baits,date){
   var p=products.find(function(x){return x.id===pid;})||{};var cost=unitCostFor(pid,baits);
-  var l={pid:pid,name:(p.name||"")+(baits?" ("+baits+"-bait bag, custom order)":""),color:p.color||"",series:p.series||"",qty:qty,cost:cost,price:poPriceFor(pid,cost,markup,baits)};
+  var l={pid:pid,name:(p.name||"")+(baits?" ("+baits+"-bait bag, custom order)":""),color:p.color||"",series:p.series||"",qty:qty,cost:cost,price:poPriceFor(pid,cost,markup,baits,date)};
   if(baits){l.baits=baits;l.custom=true;}
   return l;
 }
@@ -956,11 +969,11 @@ function wirePOEditor(){
   document.getElementById("poAdd").onclick=function(){
     var pid=parseInt(document.getElementById("poAddSel").value);
     if(d.lines.some(function(l){return l.pid===pid;})){showToast("Already on the PO — edit its qty","err");return;}
-    d.lines.push(makeLine(pid,1,d.markup_pct));renderPOEditor();
+    d.lines.push(makeLine(pid,1,d.markup_pct,undefined,d.po_date));renderPOEditor();
   };
   document.getElementById("poReprice").onclick=function(){
     var n=0,skipped=0;
-    d.lines.forEach(function(l){var c=l.pid!=null?unitCostFor(l.pid,l.baits):null;if(c==null){skipped++;return;}l.cost=c;l.price=poPriceFor(l.pid,c,d.markup_pct,l.baits);n++;});
+    d.lines.forEach(function(l){var c=l.pid!=null?unitCostFor(l.pid,l.baits):null;if(c==null){skipped++;return;}l.cost=c;l.price=poPriceFor(l.pid,c,d.markup_pct,l.baits,d.po_date);n++;});
     renderPOEditor();showToast("Re-priced "+n+" lines at "+d.markup_pct+"%"+(skipped?" ("+skipped+" without cost left as-is)":""));
   };
   document.getElementById("poRefresh").onclick=function(){

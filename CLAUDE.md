@@ -127,6 +127,11 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 ## Federal excise tax (profit.html)
 - 10% of the FIRST sale (JCB Manufacturing → Johnny Creek Baits, LLC) = `EXCISE_RATE` × `cost_profiles.first_sale`
   (soft plastics $1.10/bag → $0.11; Variety Pack $7.70; custom-size bags prorate by baits). Not set → no excise; Apparel never.
+- **From 2026-11-01 (`PER_BAIT_FROM`):** JCB Manufacturing sells the LLC LOOSE soft-plastic baits at `PER_BAIT_RATE` $0.10/bait;
+  the LLC picks, bags and labels. First sale = $0.10 × baits in the unit (item.baits, else product pack; Paddle Tail bags
+  hold 6, the rest 8; `BUNDLE_BAITS` Variety 56 / Creek 74 / Season 114). Excise/COGS/PO prices take the order/PO date, so
+  orders before Nov 1 keep `cost_profiles.first_sale` ($1.10/bag) and past months don't restate (verified: 400 existing lines,
+  identical COGS). Walker, Glide, Kanji Ball keep their per-unit first sale.
 - `getItemCOGS` = BOM cost + excise, so every margin includes it; `calcOrder` also returns `excise`. P&L + Report show a
   "Federal Excise Tax" COGS line. Expenses in category "Federal Excise Tax" (payments) are excluded from operating expenses
   (`getPeriodExpenses`) so the tax isn't counted twice.
@@ -309,3 +314,7 @@ with the code. Update the sections above if architecture changed.
   the next picks, `lineBags()`; finance got box cost profiles ($7.80 / $11.70 all-in incl. excise) + name-first cost matching
   (verified all existing products still match the same profile). Products 1202/1203 inserted in Supabase. plan.test.ts: 8 new
   box checks, all passing against live data.
+- **2026-10-21 (later)** — Excise moves to per bait from 2026-11-01: JCB Manufacturing → LLC at $0.10/bait, loose (LLC picks,
+  bags and labels). profit.html: `firstSalePrice` / `getItemExcise` / `getItemCOGS` / `poPriceFor` take a date; 8-bait bag
+  $0.08 excise (was $0.11), Paddle Tail $0.06, Creek Box $0.74, Season Box $1.14. Thomas chose a start date over restating
+  history. Open: Intercompany PO lines should become loose baits (qty in baits, cost excl. bag) — waiting on Thomas.
