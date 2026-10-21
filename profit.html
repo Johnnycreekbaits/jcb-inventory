@@ -97,6 +97,8 @@ var DEFAULT_COSTS=[
   {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.67,first_sale:1.10},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.50,first_sale:2.46},
   {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:4.69,first_sale:7.70},
+  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:6.70,first_sale:11.00},   // 10 bags × $0.67 / × $1.10
+  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:10.05,first_sale:16.50}, // 15 bags
   {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
   {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
   {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
@@ -151,7 +153,10 @@ function matchCostProfile(prod){
   if(!prod)return null;
   var s=(prod.series||"").toLowerCase();
   var n=(prod.name||"").toLowerCase();
-  var match=costProfiles.find(function(c){return c.series&&c.series.toLowerCase()===s;});
+  // Exact name first: several Bundles products (Variety Pack, Creek Box, Season Box) share one series.
+  var match=costProfiles.find(function(c){return c.name.toLowerCase()===n;});
+  if(match)return match;
+  match=costProfiles.find(function(c){return c.series&&c.series.toLowerCase()===s;});
   if(match)return match;
   match=costProfiles.find(function(c){
     var cn=c.name.toLowerCase();

@@ -66,6 +66,12 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - Matches Shopify variant SKU → `products.barcode` (Shopify SKUs are the real UPCs). "(WS)" listings = Dealer,
   6 bags per soft-plastic unit (Walkers/Glides 1). Variety Pack SKU `JCB-VAR7` → 7 component bags picked like
   the app. `PF-` (Printify apparel) and unknown SKUs are skipped and stored under `items.skipped`.
+- Pre-picked boxes (`BOXES` in `plan.ts` AND `index.html` — keep in sync): Creek Box pid 1202 `JCB-BF26-CREEK10`
+  (4 Finesse Worms, 3 Baby Hawgs, 3 Paddle Tail) and Season Box pid 1203 `JCB-BF26-SEASON15` (+2 Soft Jerk, 2 Stick
+  Baits, 1 Craw). Colors: one bag per color, most stock first, colors under `BOX_MIN_STOCK` (10) skipped, top colors get a
+  2nd bag if too few qualify (so a component can have qty 2). Logged as one line (pid 1202/1203, price paid) with a
+  `components` array like the Variety Pack; a series with no color ≥10 → whole box skipped ("not enough stock to fill").
+  Boxes are Shopify-only (in-app Add to Cart blocked), qty 0, excluded from Low/Out counts and the production planner.
 - Writes like `confirmOrder()`: next `ORD-####`, project "Shopify #1234", history `changed_by` "Shopify".
   `logs.id` = Shopify order id, so webhook retries hit a PK conflict and don't double-deduct.
   Test and cancelled orders are ignored. Stock floors at 0 (oversell logged).
@@ -143,7 +149,10 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   return-order `[data-ret]` handler (`retInFlight` Set + confirm prompt) all have one; so do
   batch save/delete (`batchInFlight`), Receive Production, and Transfers batch/PO save/delete (`trInFlight`).
 - Variety Pack order lines (pid 1201) carry a `components` array. Any code that moves stock
-  for an order (checkout, return, edit) must adjust the component bags, never pid 1201.
+  for an order (checkout, return, edit) must adjust the component bags, never pid 1201. Same for the boxes (1202/1203).
+  Count bags with `lineBags(i)` (sums component qty), not `components.length`.
+- `matchCostProfile` (profit.html) tries an exact product-name match before series, because Variety Pack, Creek Box and
+  Season Box all sit in the Bundles series. Box profiles: Creek $6.70 + first sale $11.00, Season $10.05 + $16.50.
 - Variety Pack (Bundles): always Ringo's Gift + top Nekos/Finesse Worms by stock
 - Bundles series excluded from inventory value
 
@@ -293,3 +302,10 @@ with the code. Update the sections above if architecture changed.
   (`productOptionUpdate`; variant IDs/SKUs unchanged, so the webhook is unaffected). J-Rats retired (barcodes reused for Terp
   Minnow / Soft Jerk) — ignore them. Blue/Orange Walker discontinued — deleted from Shopify (WS variant + old draft product).
   Ringo's Gift / Dirty Dawn product photos swapped for transparent PNGs (old white-box JPGs deleted from Files).
+- **2026-10-21** — Black Friday 2026 boxes (from the Shopify + Klaviyo audit, doc https://claude.ai/artifact/Mp2PtujWkLi5Gpheduqig6).
+  Shopify drafts: Creek Box 10 bags $50.00 and Season Box 15 bags $75.00, free shipping (at the $50 threshold, which Thomas
+  keeps). Thomas chose pre-picked boxes with colors by most stock. `shopify-order` expands SKU `JCB-BF26-CREEK10` /
+  `JCB-BF26-SEASON15` into component bags (see Shopify section); inventory app got matching `BOXES`, a Stock-tab card showing
+  the next picks, `lineBags()`; finance got box cost profiles ($7.80 / $11.70 all-in incl. excise) + name-first cost matching
+  (verified all existing products still match the same profile). Products 1202/1203 inserted in Supabase. plan.test.ts: 8 new
+  box checks, all passing against live data.

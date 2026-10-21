@@ -17,7 +17,7 @@ export type Plan = {
   channel: "DTC" | "Dealer";
   items: OrderItem[];
   skipped: Skipped[];
-  deductions: { pid: number; qty: number; variety: boolean }[];
+  deductions: { pid: number; qty: number; variety: boolean; bundle?: string }[];
   totalQty: number; totalVal: number;
   shipPaid: number;
 };
@@ -25,6 +25,34 @@ export type Plan = {
 export const VARIETY_PID = 1201;
 export const VARIETY_SKU = "JCB-VAR7";
 export const WS_BAGS_PER_UNIT = 6;
+
+// Pre-picked boxes (Black Friday 2026): fixed bag counts per series, colors picked by most stock.
+// Same table as BOXES in index.html — keep them in sync.
+export type BoxDef = { pid: number; name: string; sku: string; mix: { series: string; bags: number }[] };
+export const BOXES: BoxDef[] = [
+  { pid: 1202, name: "Creek Box", sku: "JCB-BF26-CREEK10", mix: [
+    { series: "Finesse Worms", bags: 4 }, { series: "Baby Hawgs", bags: 3 }, { series: "Paddle Tail", bags: 3 }] },
+  { pid: 1203, name: "Season Box", sku: "JCB-BF26-SEASON15", mix: [
+    { series: "Finesse Worms", bags: 4 }, { series: "Baby Hawgs", bags: 3 }, { series: "Paddle Tail", bags: 3 },
+    { series: "Soft Jerk", bags: 2 }, { series: "Stick Baits", bags: 2 }, { series: "Craws", bags: 1 }] },
+];
+// Colors below this are left for single-pack buyers; if too few colors qualify, the top ones get a second bag.
+export const BOX_MIN_STOCK = 10;
+
+// One bag per color, most stock first; null if a series has no color at or above BOX_MIN_STOCK.
+export function pickBoxComponents(box: BoxDef, products: Product[]): Component[] | null {
+  const comps: Component[] = [];
+  for (const m of box.mix) {
+    const pool = products.filter((p) => p.series === m.series && p.qty >= BOX_MIN_STOCK).sort((a, b) => b.qty - a.qty);
+    if (!pool.length) return null;
+    for (let i = 0; i < m.bags; i++) {
+      const p = pool[i % pool.length];
+      const ex = comps.find((c) => c.pid === p.id);
+      if (ex) ex.qty++; else comps.push({ pid: p.id, name: p.name, color: p.color || "", qty: 1 });
+    }
+  }
+  return comps;
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -87,6 +115,15 @@ export function planOrder(order: any, products: Product[]): Plan {
       continue;
     }
 
+    const box = BOXES.find((b) => b.sku === sku);
+    if (box) {
+      const comps = pickBoxComponents(box, products);
+      if (!comps) { skipped.push({ sku, title, qty, reason: `not enough stock to fill ${box.name}` }); continue; }
+      items.push({ pid: box.pid, name: box.name, color: "", qty, price: round2(paidUnitPrice(li)), components: comps });
+      for (const c of comps) deductions.push({ pid: c.pid, qty: c.qty * qty, variety: true, bundle: box.name });
+      continue;
+    }
+
     // price + ws let the app's "Match items" add the line later at what the customer actually paid
     const miss = (reason: string) => skipped.push({ sku, title, qty, reason, price: round2(paidUnitPrice(li)), ws: isWholesale(li) });
     if (!sku) { miss("no SKU"); continue; }
@@ -102,7 +139,7 @@ export function planOrder(order: any, products: Product[]): Plan {
     deductions.push({ pid: prod.id, qty: bags, variety: false });
   }
 
-  const totalQty = items.reduce((s, i) => s + (i.components ? i.components.length * i.qty : i.qty), 0);
+  const totalQty = items.reduce((s, i) => s + (i.components ? i.components.reduce((n, c) => n + c.qty, 0) * i.qty : i.qty), 0);
   const totalVal = round2(items.reduce((s, i) => s + i.qty * i.price, 0));
   return { channel: anyWs ? "Dealer" : "DTC", items, skipped, deductions, totalQty, totalVal, shipPaid: shippingPaid(order) };
 }

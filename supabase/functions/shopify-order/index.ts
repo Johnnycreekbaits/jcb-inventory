@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
   const person = customerName(order);
   if (plan.skipped.length) console.log(label, "skipped lines:", JSON.stringify(plan.skipped));
   if (dry) {
-    const lines = plan.items.map((i) => i.components ? `${i.qty}x Variety Pack (${i.components.map((c) => c.color).join(", ")})` : `${i.qty}x ${i.name} ${i.color} @ $${i.price}`);
+    const lines = plan.items.map((i) => i.components ? `${i.qty}x ${i.name} @ $${i.price} (${i.components.map((c) => (c.qty > 1 ? c.qty + "x " : "") + c.color).join(", ")})` : `${i.qty}x ${i.name} ${i.color} @ $${i.price}`);
     console.log(`DRY ${label} | ${person} | ${plan.channel} | ${lines.join("; ")} | ship $${plan.shipPaid}` + (plan.skipped.length ? ` | skipped: ${plan.skipped.map((s) => s.title).join(", ")}` : "") +
       (ignore ? ` | LIVE WOULD IGNORE: ${ignore}` : ""));
     return json({ dry: true, label, person, ...plan });
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         id: Date.now() + Math.floor(Math.random() * 1000), product_id: prod.id, product_name: prod.name, color: prod.color || "",
         change_type: "checkout", qty_before: before, qty_after: after, changed_by: "Shopify",
-        note: (d.variety ? "Variety Pack — " : "") + `Order for ${person} via ${plan.channel} - ${label}`,
+        note: (d.variety ? (d.bundle || "Variety Pack") + " — " : "") + `Order for ${person} via ${plan.channel} - ${label}`,
       }),
     }).catch((e) => console.warn("history:", e.message));
   }
