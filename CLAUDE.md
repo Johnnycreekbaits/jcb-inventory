@@ -402,3 +402,6 @@ with the code. Update the sections above if architecture changed.
   24/shot, 110 s; at $0.10 Mfg lost ~$0.04/bag). `PER_BAIT_RATES` per cost-profile id with from-dates, `perBaitRate(cp,date)` used by
   `firstSalePrice` + loose PO lines. Terp bag: Mfg −$0.04 → +$0.10, LLC Dealer $2.32 → $2.16, combined −$0.016 (excise $0.08 → $0.096).
   No Terp orders on/after Oct 21, so nothing restated; all totals verified unchanged.
+  Later 2026-10-22 (Thomas, "safe rule"): soft-plastic price to the LLC = cost/bait × 1.2 ÷ 0.9 (cost + 20% after excise), rounded
+  up, floor $0.10 → Terp Minnow $0.13, Stick $0.11, Paddle Tail $0.11 from 2026-10-22; rest stay $0.10 (Hawg/Craw ~20%, just clear).
+  Only Shopify #1036/#1037 (today, Paddle Tail) changed: combined excise +$0.042; everything earlier identical.
