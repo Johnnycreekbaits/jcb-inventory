@@ -42,6 +42,15 @@ input,select,textarea{font-family:'DM Sans',sans-serif;}
 .period-bar{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
 .period-btn{background:#fff;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;}
 .period-btn.active{background:#ea580c;color:#fff;border-color:#ea580c;}
+.entity-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:#e2e8f0;border-radius:12px;padding:4px;margin-bottom:10px;}
+.entity-btn{background:transparent;color:#475569;border:none;border-radius:9px;padding:8px 4px;font-size:11px;font-weight:700;cursor:pointer;line-height:1.25;font-family:'DM Sans',sans-serif;}
+.entity-btn.active{background:#1B1E5F;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15);}
+.cost-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.cost-tbl th{color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;padding:6px 4px;text-align:right;vertical-align:bottom;}
+.cost-tbl th:first-child,.cost-tbl td:first-child{text-align:left;}
+.cost-tbl td{padding:8px 4px;border-top:1px solid #f1f5f9;text-align:right;white-space:nowrap;}
+.cost-tbl td:first-child{white-space:normal;font-weight:600;}
+.cost-tbl .sub{display:block;font-size:10px;color:#94a3b8;font-weight:500;}
 .pl-section-hd{font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:.1em;text-transform:uppercase;padding:12px 0 6px;}
 .pl-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f8fafc;font-size:13px;}
 .pl-row:last-child{border-bottom:none;}
@@ -256,28 +265,68 @@ function returnNetter(log){
   var back=log.st==="Out"&&partialReturns[log.id]?Object.assign({},partialReturns[log.id]):{};
   return function(pid,qty){var r=Math.min(qty,back[pid]||0);if(r)back[pid]-=r;return qty-r;};
 }
+// ── Two companies ──
+// JCB Manufacturing makes the baits and sells them to Johnny Creek Baits, LLC at the first-sale price (excise = Mfg's tax).
+// The LLC bags (from COGS_FROM; before that Mfg sold finished bags), labels and sells. Both companies' books are figured on
+// what was SOLD in the period (same basis as excise), so Mfg + LLC always add up to Combined. POs stay the billing record.
+// Items with no first sale (Apparel, Swim Bait) are the LLC's alone.
+var ENTITIES={combined:"Combined",llc:"Johnny Creek Baits LLC",mfg:"JCB Manufacturing"};
+var entity=(function(){try{var e=localStorage.getItem("jcb_entity");return ENTITIES[e]?e:"combined";}catch(x){return"combined";}})();
+var BUNDLE_BAGS={"variety-pack":7,"creek-box":10,"season-box":15};
+// The LLC's own packaging per unit: bag + bagging labor per bag it fills (soft plastics + bundles, from COGS_FROM only)
+function llcBagsIn(cp,date){
+  if(isOldCOGS(cp,date))return 0;
+  if(BUNDLE_BAGS[cp.id])return BUNDLE_BAGS[cp.id];
+  return PER_BAIT_SERIES.indexOf(cp.series)>=0?1:0;
+}
+// Splits one line's cost between the companies. combined cogs = mfgCost + llcPack + excise (same as getItemCOGS).
+function lineSplit(q,p,baits,date){
+  var cp=matchCostProfile(p),z={buy:0,pack:0,mfgCost:0,excise:0,mfgLabor:0,llcLabor:0};
+  if(!cp)return z;
+  var c=bagCOGS(cp,p,baits,date)*q,ex=getItemExcise(q,p,baits,date),lab=ownerLaborFor(cp,p,baits,date)*q;
+  var fs=NO_EXCISE_SERIES.indexOf(cp.series)>=0?0:firstSalePrice(cp,p,baits,date)*q;
+  if(!(fs>0))return{buy:0,pack:c,mfgCost:0,excise:ex,mfgLabor:0,llcLabor:lab};
+  var bags=llcBagsIn(cp,date)*q,pack=Math.min(c,bags*BAG_COST),bl=Math.min(lab,bags*BAGGING_LABOR);
+  return{buy:fs,pack:pack,mfgCost:c-pack,excise:ex,mfgLabor:lab-bl,llcLabor:bl};
+}
+// A line's numbers as one company sees them
+function entityView(rev,sp,ent){
+  if(ent==="llc")return{rev:rev,cogs:sp.buy+sp.pack,excise:0,labor:sp.llcLabor,buy:sp.buy,pack:sp.pack};
+  if(ent==="mfg")return{rev:sp.buy,cogs:sp.mfgCost+sp.excise,excise:sp.excise,labor:sp.mfgLabor,buy:0,pack:0};
+  return{rev:rev,cogs:sp.mfgCost+sp.pack+sp.excise,excise:sp.excise,labor:sp.mfgLabor+sp.llcLabor,buy:0,pack:0};
+}
+function entityBarHTML(){
+  return'<div class="entity-bar no-print">'+Object.keys(ENTITIES).map(function(k){return'<button class="entity-btn'+(entity===k?" active":"")+'" data-entity="'+k+'">'+(k==="combined"?"&#x1F91D; Combined":k==="llc"?"&#x1F6CD;&#xFE0F; Johnny Creek Baits":"&#x1F3ED; JCB Manufacturing")+'</button>';}).join("")+'</div>';
+}
 // One entry per order line, net of partial returns. calcOrder sums these, so the Orders tab and every total agree.
-function calcOrderLines(log,prods){
+// Values are for the selected company (entity) unless ent is passed.
+function calcOrderLines(log,prods,ent){
+  ent=ent||entity;
   var items=parseItems(log.items),net=returnNetter(log),lines=[];
+  function add(base,q,p,baits){
+    var v=entityView(base.rev,lineSplit(q,p,baits,log.date),ent);
+    if(ent==="mfg")base.price=q?v.rev/q:0;
+    lines.push(Object.assign(base,{pid:p?p.id:null,rev:v.rev,cogs:v.cogs,excise:v.excise,labor:v.labor,buy:v.buy,pack:v.pack}));
+  }
   if(items.length>0){
     items.forEach(function(item){
       var p=prods.find(function(x){return x.id===item.pid;});
       var q=net(item.pid,item.qty);
-      lines.push({name:item.name||(p&&p.name)||"Item",color:item.color||(p&&p.color)||"",qty:q,returned:(item.qty||0)-q,baits:item.baits,
-        price:item.price||0,rev:q*(item.price||0),cogs:getItemCOGS(q,p,item.baits,log.date),excise:getItemExcise(q,p,item.baits,log.date),labor:getItemLabor(q,p,item.baits,log.date)});
+      add({name:item.name||(p&&p.name)||"Item",color:item.color||(p&&p.color)||"",qty:q,returned:(item.qty||0)-q,baits:item.baits,
+        price:item.price||0,rev:q*(item.price||0)},q,p,item.baits);
     });
   }else{
     var p=prods.find(function(x){return x.id===log.pid;});
     var q=net(log.pid,log.qty);
     var price=getChannelPrice(p||{price:log.price||0,pack:8},log.ch||"Retail");
-    lines.push({name:p?p.name:"Item",color:p?p.color:"",qty:q,returned:(log.qty||0)-q,price:price,rev:q*price,cogs:getItemCOGS(q,p,undefined,log.date),excise:getItemExcise(q,p,undefined,log.date),labor:getItemLabor(q,p,undefined,log.date)});
+    add({name:p?p.name:"Item",color:p?p.color:"",qty:q,returned:(log.qty||0)-q,price:price,rev:q*price},q,p,undefined);
   }
   return lines;
 }
-function calcOrder(log,prods){
-  var rev=0,cogs=0,excise=0,labor=0;
-  calcOrderLines(log,prods).forEach(function(l){rev+=l.rev;cogs+=l.cogs;excise+=l.excise;labor+=l.labor;});
-  return{rev:rev,cogs:cogs,excise:excise,labor:labor};
+function calcOrder(log,prods,ent){
+  var o={rev:0,cogs:0,excise:0,labor:0,buy:0,pack:0};
+  calcOrderLines(log,prods,ent).forEach(function(l){o.rev+=l.rev;o.cogs+=l.cogs;o.excise+=l.excise;o.labor+=l.labor;o.buy+=l.buy;o.pack+=l.pack;});
+  return o;
 }
 // Per-sale profit (Orders tab) = revenue − COGS (incl. excise) + shipping net − estimated Shopify card fee.
 // Shopify fees aren't recorded anywhere, so Shopify orders use the standard online rate on what the customer paid.
@@ -287,9 +336,10 @@ function isShopifyOrder(l){return /^Shopify #/.test(l.project||"");}
 function isGiveawayCh(ch){return ch==="Sample/Promo"||ch==="Internal"||ch==="Sponsorship"||ch==="Sponsorship/Promo";}
 function orderProfit(l){
   var o=calcOrder(l,products);
-  var hasShip=l.ship_paid!=null||l.ship_cost!=null;
+  // Shipping and card fees are the LLC's (it ships and takes payment); Manufacturing's view leaves them out
+  var hasShip=entity!=="mfg"&&(l.ship_paid!=null||l.ship_cost!=null);
   var ship=hasShip?Number(l.ship_paid||0)-Number(l.ship_cost||0):0;
-  var fee=isShopifyOrder(l)&&o.rev>0?(o.rev+Number(l.ship_paid||0))*SHOPIFY_FEE_PCT+SHOPIFY_FEE_FIXED:0;
+  var fee=entity!=="mfg"&&isShopifyOrder(l)&&o.rev>0?(o.rev+Number(l.ship_paid||0))*SHOPIFY_FEE_PCT+SHOPIFY_FEE_FIXED:0;
   var profit=o.rev-o.cogs+ship-fee;
   return{rev:o.rev,cogs:o.cogs,excise:o.excise,hasShip:hasShip,ship:ship,shipMissing:l.ship_paid!=null&&l.ship_cost==null,fee:fee,profit:profit,margin:o.rev>0?profit/o.rev*100:null};
 }
@@ -327,16 +377,20 @@ function getPeriodMonths(){
 function localDateStr(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function getPeriodLogs(){var r=getPeriodRange();var s=localDateStr(r.start),e=localDateStr(r.end);return logs.filter(function(l){return l.date>=s&&l.date<=e&&l.st!=="Returned";});}
 // Excise payments (category EXCISE_CAT) are left out of operating expenses: the tax is already in COGS. See Transfers → Excise.
-function getPeriodExpenses(){if(!expReady)return[];var ms=getPeriodMonths();return expenses.filter(function(e){return ms.indexOf(e.month)>=0&&e.category!==EXCISE_CAT;});}
-function excisePaidNote(){if(!expReady)return"";var ms=getPeriodMonths(),t=0;expenses.forEach(function(e){if(e.category===EXCISE_CAT&&ms.indexOf(e.month)>=0)t+=Number(e.amount);});
+// Each expense belongs to one company (expenses.entity; untagged rows count as the LLC's until tagged)
+var expHasEntity=false,expEntity=entity==="mfg"?"mfg":"llc"; // expEntity = company the Expenses tab is showing
+function expEntityOf(e){return e.entity==="mfg"?"mfg":"llc";}
+function entityExp(e){return entity==="combined"||expEntityOf(e)===entity;}
+function getPeriodExpenses(){if(!expReady)return[];var ms=getPeriodMonths();return expenses.filter(function(e){return ms.indexOf(e.month)>=0&&e.category!==EXCISE_CAT&&entityExp(e);});}
+function excisePaidNote(){if(!expReady||entity==="llc")return"";var ms=getPeriodMonths(),t=0;expenses.forEach(function(e){if(e.category===EXCISE_CAT&&ms.indexOf(e.month)>=0)t+=Number(e.amount);});
   return t>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Excise payments entered as expenses ('+fmt$(t)+') are not counted again &mdash; excise is in COGS</span></div>':"";}
 
 function calcSummary(fl,fe){
-  var rev=0,cogs=0,excise=0,labor=0,expTotal=0;
-  fl.forEach(function(l){var o=calcOrder(l,products);rev+=o.rev;cogs+=o.cogs;excise+=o.excise;labor+=o.labor;});
+  var rev=0,cogs=0,excise=0,labor=0,buy=0,pack=0,expTotal=0;
+  fl.forEach(function(l){var o=calcOrder(l,products);rev+=o.rev;cogs+=o.cogs;excise+=o.excise;labor+=o.labor;buy+=o.buy;pack+=o.pack;});
   fe.forEach(function(e){expTotal+=Number(e.amount);});
   var gross=rev-cogs,net=gross-expTotal;
-  return{rev:rev,cogs:cogs,excise:excise,labor:labor,cashNet:net+labor,gross:gross,grossPct:rev>0?(gross/rev)*100:0,expenses:expTotal,net:net,netPct:rev>0?(net/rev)*100:0,orders:fl.length};
+  return{rev:rev,cogs:cogs,excise:excise,labor:labor,buy:buy,pack:pack,cashNet:net+labor,gross:gross,grossPct:rev>0?(gross/rev)*100:0,expenses:expTotal,net:net,netPct:rev>0?(net/rev)*100:0,orders:fl.length};
 }
 
 function periodLabel(){
@@ -360,6 +414,7 @@ function boot(){
     dbGet("returns","?select=log_id,items&log_id=not.is.null").catch(function(){return[];})
   ]).then(function(res){
     products=res[0];logs=res[1];expenses=res[2];setPartialReturns(res[3]);
+    dbGet("expenses","?select=entity&limit=1").then(function(){expHasEntity=true;if(activeTab==="exp")render();}).catch(function(){expHasEntity=false;});
     render();
     loadTransfers().then(function(){if(activeTab==="tr"||activeTab==="prod")render();});
     // Load cost profiles after initial render — non-blocking
@@ -421,10 +476,10 @@ function dashHTML(){
   var chList=Object.entries(byChannel).sort(function(a,b){return b[1].rev-a[1].rev;});
   var maxRev=chList.length?chList[0][1].rev:1;
   var noExp=!expReady?'<div class="hint-box">&#x26A0;&#xFE0F; <strong>Expenses table not set up.</strong> Net profit reflects gross profit only. Go to the Expenses tab for setup instructions.</div>':"";
-  if(fl.length===0)return periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+periodLabel()+'</div><div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F4CA;</div><div style="font-weight:600;">No orders in this period</div></div>';
+  if(fl.length===0)return entityBarHTML()+periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+'</div><div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F4CA;</div><div style="font-weight:600;">No orders in this period</div></div>';
   var netBg=s.net>=0?"background:#eff6ff;border:1px solid #bfdbfe;":"background:#fef2f2;border:1px solid #fecaca;";
   var netColor=s.net>=0?"#2563eb":"#dc2626";
-  return periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+periodLabel()+" &middot; "+s.orders+' orders</div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+fmt$(s.rev)+'</div><div class="kpi-lbl">Revenue</div></div><div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:#16a34a;">'+fmt$(s.gross)+'</div><div class="kpi-lbl">Gross Profit</div><div class="kpi-sub" style="color:#16a34a;">'+fmtPct(s.grossPct)+'</div></div><div class="kpi" style="'+netBg+'"><div class="kpi-val" style="color:'+netColor+';">'+fmt$(s.net)+'</div><div class="kpi-lbl">Net Profit</div><div class="kpi-sub" style="color:'+netColor+';">'+fmtPct(s.netPct)+'</div>'+(s.labor>0?'<div class="kpi-sub" style="color:#0f766e;">cash '+fmt$(s.cashNet)+' &middot; owner labor unpaid</div>':'')+'</div><div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(s.cogs)+'</div><div class="kpi-lbl">COGS</div></div><div class="kpi" style="background:#faf5ff;border:1px solid #e9d5ff;"><div class="kpi-val" style="color:#7c3aed;">'+fmt$(calcInventoryValue())+'</div><div class="kpi-lbl">Inventory Value</div><div class="kpi-sub" style="color:#7c3aed;">at cost &middot; on hand</div></div>'+(function(){var ar=calcAccountsReceivable();return ar.count>0?'<div class="kpi" id="arTile" style="background:#fef2f2;border:1px solid #fecaca;cursor:pointer;"><div class="kpi-val" style="color:#dc2626;">'+fmt$(ar.total)+'</div><div class="kpi-lbl">Receivable</div><div class="kpi-sub" style="color:#dc2626;">'+ar.count+' unpaid &rarr; tap to view</div></div>':'';})()+'</div>'+shippingCardHTML(fl)+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">Revenue by Channel</div>'+chList.map(function(e){var margin=e[1].rev>0?(e[1].rev-e[1].cogs)/e[1].rev*100:0;return'<div class="bar-row"><div class="bar-label"><span style="font-weight:600;">'+e[0]+'</span><span style="color:#ea580c;font-weight:700;">'+fmt$(e[1].rev)+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">'+fmtPct(margin)+'</span></span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+Math.round((e[1].rev/maxRev)*100)+'%;background:#f97316;"></div></div></div>';}).join("")+'</div>';
+  return entityBarHTML()+periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+" &middot; "+s.orders+' orders</div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+fmt$(s.rev)+'</div><div class="kpi-lbl">Revenue</div></div><div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:#16a34a;">'+fmt$(s.gross)+'</div><div class="kpi-lbl">Gross Profit</div><div class="kpi-sub" style="color:#16a34a;">'+fmtPct(s.grossPct)+'</div></div><div class="kpi" style="'+netBg+'"><div class="kpi-val" style="color:'+netColor+';">'+fmt$(s.net)+'</div><div class="kpi-lbl">Net Profit</div><div class="kpi-sub" style="color:'+netColor+';">'+fmtPct(s.netPct)+'</div>'+(s.labor>0?'<div class="kpi-sub" style="color:#0f766e;">cash '+fmt$(s.cashNet)+' &middot; owner labor unpaid</div>':'')+'</div><div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(s.cogs)+'</div><div class="kpi-lbl">COGS</div></div>'+(entity==="mfg"?'':'<div class="kpi" style="background:#faf5ff;border:1px solid #e9d5ff;"><div class="kpi-val" style="color:#7c3aed;">'+fmt$(calcInventoryValue())+'</div><div class="kpi-lbl">Inventory Value</div><div class="kpi-sub" style="color:#7c3aed;">at cost &middot; on hand</div></div>')+''+(function(){var ar=calcAccountsReceivable();return entity!=="mfg"&&ar.count>0?'<div class="kpi" id="arTile" style="background:#fef2f2;border:1px solid #fecaca;cursor:pointer;"><div class="kpi-val" style="color:#dc2626;">'+fmt$(ar.total)+'</div><div class="kpi-lbl">Receivable</div><div class="kpi-sub" style="color:#dc2626;">'+ar.count+' unpaid &rarr; tap to view</div></div>':'';})()+'</div>'+(entity==="mfg"?'':shippingCardHTML(fl))+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">'+(entity==="mfg"?'Sales to Johnny Creek Baits <span style="font-size:10px;color:#94a3b8;font-weight:500;">by where the bags were sold</span>':'Revenue by Channel')+'</div>'+chList.map(function(e){var margin=e[1].rev>0?(e[1].rev-e[1].cogs)/e[1].rev*100:0;return'<div class="bar-row"><div class="bar-label"><span style="font-weight:600;">'+e[0]+'</span><span style="color:#ea580c;font-weight:700;">'+fmt$(e[1].rev)+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">'+fmtPct(margin)+'</span></span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+Math.round((e[1].rev/maxRev)*100)+'%;background:#f97316;"></div></div></div>';}).join("")+'</div>';
 }
 
 // Shipping collected from customers vs. what labels cost us (logs.ship_paid / logs.ship_cost).
@@ -472,7 +527,7 @@ function ordersHTML(){
     +Object.keys(chs).sort().map(function(c){return'<button class="period-btn" style="'+chipStyle(ordCh===c)+'" data-ordch="'+escHtml(c)+'">'+escHtml(c)+' ('+chs[c]+')</button>';}).join("")+'</div>';
   var sortSel='<div class="no-print" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span class="field-label" style="margin:0;">Sort</span><select class="field-input" id="ordSort" style="width:auto;padding:7px 10px;font-size:12px;">'
     +[["new","Newest first"],["profit","Most profit"],["loss","Least profit"],["margin","Lowest margin"]].map(function(o){return'<option value="'+o[0]+'"'+(ordSort===o[0]?" selected":"")+'>'+o[1]+'</option>';}).join("")+'</select></div>';
-  var head=periodBarHTML()+'<div class="section-title">ORDERS</div><div class="section-sub">'+periodLabel()+' &middot; profit per sale (net of returns)</div>';
+  var head=entityBarHTML()+periodBarHTML()+'<div class="section-title">ORDERS</div><div class="section-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+' &middot; profit per sale (net of returns)'+(entity==="mfg"?' &middot; Manufacturing&rsquo;s share: the baits in each order sold to the LLC':'')+'</div>';
   if(rows.length===0)return head+chips+'<div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F9FE;</div><div style="font-weight:600;">No orders in this period</div></div>';
   var pc=function(n){return n>=0?"#16a34a":"#dc2626";};
   var kpis='<div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+rows.length+'</div><div class="kpi-lbl">Orders</div></div>'
@@ -558,17 +613,26 @@ function prodHTML(){
     var madeLine=trReady?'<div style="font-size:11px;color:#7c3aed;font-weight:600;margin-top:2px;">&#x1F9EA; '+(t.made||0)+' made this period &middot; '+t.qty+' sold/distributed</div>':'';
     return'<div class="card" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div><div style="font-weight:700;font-size:14px;">'+t.name+'</div>'+madeLine+'</div><div style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#ea580c;">'+t.qty+' '+t.unit+'s</div></div><div style="margin-bottom:10px;">'+chTags+'</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"><div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">COGS</div><div style="font-weight:700;color:#dc2626;font-size:13px;">'+fmt$(t.cogs)+'</div></div><div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Revenue</div><div style="font-weight:700;color:#16a34a;font-size:13px;">'+fmt$(t.rev)+'</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Margin</div><div style="font-weight:700;font-size:13px;">'+fmtPct(margin)+'</div></div></div></div>';
   }).join("");
-  return periodBarHTML()+'<div class="section-title">SALES BY PRODUCT</div><div class="section-sub">'+periodLabel()+' &middot; '+totalQty+' units sold &amp; distributed (net of returns)'+(trReady?' &middot; '+madeTotal+' made (batches)':'')+'</div>'+rowsHTML+'<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;"><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total COGS</span><span style="color:#dc2626;">'+fmt$(totalCogs)+'</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total Revenue</span><span style="color:#16a34a;">'+fmt$(totalRev)+'</span></div><div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:4px;"><span style="font-weight:700;">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#2563eb;">'+fmt$(totalRev-totalCogs)+'</span></div></div>';
+  return periodBarHTML()+'<div class="section-title">SALES BY PRODUCT</div><div class="section-sub">Both companies combined &middot; '+periodLabel()+' &middot; '+totalQty+' units sold &amp; distributed (net of returns)'+(trReady?' &middot; '+madeTotal+' made (batches)':'')+'</div>'+rowsHTML+'<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;"><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total COGS</span><span style="color:#dc2626;">'+fmt$(totalCogs)+'</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total Revenue</span><span style="color:#16a34a;">'+fmt$(totalRev)+'</span></div><div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:4px;"><span style="font-weight:700;">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#2563eb;">'+fmt$(totalRev-totalCogs)+'</span></div></div>';
 }
 
 // Owner labor is inside COGS (true cost); these show how much of it is unpaid owner time and the cash profit without it.
 function ownerLaborNoteHTML(s){
-  return s.labor>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Includes owner labor (not paid) &mdash; Zorn $40/hr + bagging $20/hr</span><span style="color:#94a3b8;font-weight:600;">'+fmt$(s.labor)+'</span></div>':'';
+  return s.labor>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Includes owner labor (not paid) &mdash; '+(entity==="llc"?'bagging $20/hr':entity==="mfg"?'Zorn $40/hr':'Zorn $40/hr + bagging $20/hr')+'</span><span style="color:#94a3b8;font-weight:600;">'+fmt$(s.labor)+'</span></div>':'';
 }
 function cashProfitHTML(s){
   if(!(s.labor>0))return'';
   var c=s.cashNet>=0?"#0f766e":"#dc2626";
   return'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin-top:8px;border:1px dashed #99f6e4;border-radius:12px;background:#f0fdfa;"><div><div style="font-weight:700;font-size:13px;color:'+c+';">Cash Profit</div><div style="font-size:10px;color:#64748b;">Net + '+fmt$(s.labor)+' owner labor not paid</div></div><span style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:'+c+';">'+fmt$(s.cashNet)+'</span></div>';
+}
+// Cost of goods lines for the selected company. sponsorCogs = giveaway cost (no excise) on the combined view.
+function cogsRowsHTML(s,sponsorCogs,red){
+  var row=function(l,v,sub){return'<div class="pl-row"><span style="color:#475569;">'+l+(sub?' <span style="font-size:10px;color:#94a3b8;">'+sub+'</span>':'')+'</span><span style="font-weight:600;'+(red?'color:#dc2626;':'')+'">-'+fmt$(v)+'</span></div>';};
+  var exRow=s.excise>0?row("Federal Excise Tax",s.excise,"10% of sales to the LLC"):'';
+  if(entity==="llc")return(s.buy>0?row("Baits bought from JCB Manufacturing",s.buy,"first-sale price"):'')+(s.pack>0?row("Bags + bagging labor",s.pack,"incl. apparel &amp; other items not made by JCB"):'')+ownerLaborNoteHTML(s);
+  if(entity==="mfg")return(s.cogs-s.excise>0?row("Cost to make baits",s.cogs-s.excise,"materials + Zorn labor"):'')+exRow+ownerLaborNoteHTML(s)+excisePaidNote();
+  var paid=s.cogs-s.excise-sponsorCogs;
+  return(paid>0?row("Product COGS (BOM)",paid):'')+(sponsorCogs>0?row("Sponsorship Cost",sponsorCogs):'')+exRow+ownerLaborNoteHTML(s)+excisePaidNote();
 }
 function plHTML(){
   var fl=getPeriodLogs(),fe=getPeriodExpenses(),s=calcSummary(fl,fe);
@@ -585,23 +649,25 @@ function plHTML(){
   var netBorder=s.net>=0?"#bfdbfe":"#fecaca";
   var noExpNote=!expReady?'<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:6px 0;">Expenses table not set up — see Expenses tab</div>':fe.length===0?'<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:6px 0;">No expenses entered for this period</div>':"";
   var sponsorCogs=0;fl.forEach(function(l){if(l.ch==="Sponsorship/Promo"){var o=calcOrder(l,products);sponsorCogs+=o.cogs-o.excise;}});
-  var paidCogs=s.cogs-s.excise-sponsorCogs;
-  var cogsRows=(paidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(paidCogs)+'</span></div>':'')+(sponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship Cost</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(sponsorCogs)+'</span></div>':'')+(s.excise>0?'<div class="pl-row"><span style="color:#475569;">Federal Excise Tax <span style="font-size:10px;color:#94a3b8;">10% of first sale</span></span><span style="font-weight:600;color:#dc2626;">-'+fmt$(s.excise)+'</span></div>':'')+ownerLaborNoteHTML(s)+excisePaidNote();
-  return periodBarHTML()+'<div class="section-title">PROFIT & LOSS</div><div class="section-sub">'+periodLabel()+'</div><div class="card"><div class="pl-section-hd">Revenue</div>'+revRows+'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div><div class="pl-section-hd">Cost of Goods Sold</div>'+cogsRows+'<div class="pl-total-row"><span>Total COGS</span><span style="color:#dc2626;">-'+fmt$(s.cogs)+'</span></div><div class="profit-box" style="background:'+grossBg+';border:1px solid '+grossBorder+';"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;color:'+grossColor+';">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:'+grossColor+';">'+fmt$(s.gross)+'</span></div><div style="font-size:11px;color:'+grossColor+';margin-top:3px;">'+fmtPct(s.grossPct)+' gross margin</div></div><div class="pl-section-hd">Operating Expenses</div>'+noExpNote+expRows+(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span style="color:#dc2626;">-'+fmt$(s.expenses)+'</span></div>':"")+'<div class="profit-box" style="background:'+netBg+';border:1px solid '+netBorder+';margin-bottom:0;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:30px;color:'+netColor+';">'+fmt$(s.net)+'</span></div><div style="font-size:11px;color:'+netColor+';margin-top:3px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div></div>'+cashProfitHTML(s)+'</div>';
+  var cogsRows=cogsRowsHTML(s,sponsorCogs,true);
+  return entityBarHTML()+periodBarHTML()+'<div class="section-title">PROFIT & LOSS</div><div class="section-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+'</div><div class="card"><div class="pl-section-hd">'+(entity==="mfg"?'Sales to Johnny Creek Baits <span style="font-weight:500;">(by where the bags sold)</span>':'Revenue')+'</div>'+revRows+'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div><div class="pl-section-hd">Cost of Goods Sold</div>'+cogsRows+'<div class="pl-total-row"><span>Total COGS</span><span style="color:#dc2626;">-'+fmt$(s.cogs)+'</span></div><div class="profit-box" style="background:'+grossBg+';border:1px solid '+grossBorder+';"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;color:'+grossColor+';">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:'+grossColor+';">'+fmt$(s.gross)+'</span></div><div style="font-size:11px;color:'+grossColor+';margin-top:3px;">'+fmtPct(s.grossPct)+' gross margin</div></div><div class="pl-section-hd">Operating Expenses</div>'+noExpNote+expRows+(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span style="color:#dc2626;">-'+fmt$(s.expenses)+'</span></div>':"")+'<div class="profit-box" style="background:'+netBg+';border:1px solid '+netBorder+';margin-bottom:0;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:30px;color:'+netColor+';">'+fmt$(s.net)+'</span></div><div style="font-size:11px;color:'+netColor+';margin-top:3px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div></div>'+cashProfitHTML(s)+'</div>';
 }
 
 function expHTML(){
   if(!expReady){
     return'<div class="section-title">EXPENSES</div><div class="section-sub">Monthly operating costs</div><div class="card" style="border:1px solid #fde68a;"><div style="font-weight:700;font-size:14px;color:#92400e;margin-bottom:12px;">&#x2699;&#xFE0F; One-time setup required</div><div style="font-size:12px;color:#64748b;line-height:1.8;margin-bottom:14px;">Run this in the Supabase SQL editor to create the expenses table:</div><div style="background:#1e293b;color:#4ade80;border-radius:10px;padding:14px;font-size:11px;font-family:monospace;line-height:2;margin-bottom:14px;overflow-x:auto;">create table expenses (<br>&nbsp;&nbsp;id bigint primary key,<br>&nbsp;&nbsp;month text not null,<br>&nbsp;&nbsp;category text not null,<br>&nbsp;&nbsp;description text default \'\',<br>&nbsp;&nbsp;amount numeric(10,2) not null,<br>&nbsp;&nbsp;created_by text default \'\',<br>&nbsp;&nbsp;created_at timestamptz default now()<br>);</div><a href="https://supabase.com/dashboard/project/rgjnasxasmwzvywgkgdu/sql" target="_blank" class="btn-primary" style="display:inline-block;text-decoration:none;margin-bottom:10px;">Open Supabase SQL Editor &#x2192;</a><div style="font-size:11px;color:#94a3b8;margin-top:8px;">After running the SQL, refresh this page.</div></div>';
   }
-  var monthExp=expenses.filter(function(e){return e.month===expMonth;});
+  var monthExp=expenses.filter(function(e){return e.month===expMonth&&expEntityOf(e)===expEntity;});
+  var compBar='<div class="field-wrap"><label class="field-label">Company</label><div class="entity-bar" style="grid-template-columns:1fr 1fr;margin-bottom:0;">'+["llc","mfg"].map(function(k){return'<button class="entity-btn'+(expEntity===k?" active":"")+'" data-expent="'+k+'">'+ENTITIES[k]+'</button>';}).join("")+'</div></div>';
+  var sqlNote=expHasEntity?'':'<div class="hint-box">&#x2699;&#xFE0F; <strong>One-time setup:</strong> run <code>supabase/sql/2026-10-22_expense_entity.sql</code> in the Supabase SQL editor so each expense can be tagged with its company. Until then every expense counts as Johnny Creek Baits LLC&rsquo;s.</div>';
+  var other=expEntity==="llc"?"mfg":"llc";
   var monthTotal=monthExp.reduce(function(s,e){return s+Number(e.amount);},0);
-  var expList=monthExp.length===0?'<div style="text-align:center;padding:20px;color:#94a3b8;font-size:12px;">No expenses entered for this month</div>':monthExp.map(function(e){return'<div class="exp-item"><div style="flex:1;min-width:0;margin-right:10px;"><div style="font-weight:600;margin-bottom:3px;">'+e.description+'</div><span class="exp-cat">'+e.category+'</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:700;color:#dc2626;white-space:nowrap;">'+fmt$(e.amount)+'</span><button class="del-btn" data-delexp="'+e.id+'">&#x2715;</button></div></div>';}).join("");
+  var expList=monthExp.length===0?'<div style="text-align:center;padding:20px;color:#94a3b8;font-size:12px;">No expenses entered for this month</div>':monthExp.map(function(e){return'<div class="exp-item"><div style="flex:1;min-width:0;margin-right:10px;"><div style="font-weight:600;margin-bottom:3px;">'+e.description+'</div><span class="exp-cat">'+e.category+'</span></div><div style="display:flex;align-items:center;gap:8px;">'+(expHasEntity?'<button class="btn-gray" style="padding:4px 8px;font-size:10px;" data-expmove="'+e.id+'" title="Move to '+ENTITIES[other]+'">&rarr; '+(other==="mfg"?"Mfg":"LLC")+'</button>':'')+'<span style="font-weight:700;color:#dc2626;white-space:nowrap;">'+fmt$(e.amount)+'</span><button class="del-btn" data-delexp="'+e.id+'">&#x2715;</button></div></div>';}).join("");
   var prevHTML="";
   if(impPrev&&impPrev.length>0){
-    prevHTML='<div class="card" style="border:1px solid #bbf7d0;background:#f0fdf4;margin-bottom:10px;"><div style="font-weight:700;font-size:13px;color:#16a34a;margin-bottom:10px;">&#x2705; '+impPrev.length+' expenses ready to import</div>'+impPrev.slice(0,20).map(function(m){return'<div class="preview-row"><div><span class="exp-cat">'+m.category+'</span><span style="margin-left:8px;font-size:12px;font-weight:600;">'+m.description+'</span></div><span style="font-weight:700;color:#dc2626;">'+fmt$(m.amount)+'</span></div>';}).join("")+'</div><button class="btn-green" id="btnApplyExp" style="width:100%;padding:12px;font-size:14px;margin-bottom:14px;">&#x2705; Apply '+impPrev.length+' Expenses for '+expMonth+'</button>';
+    prevHTML='<div class="card" style="border:1px solid #bbf7d0;background:#f0fdf4;margin-bottom:10px;"><div style="font-weight:700;font-size:13px;color:#16a34a;margin-bottom:10px;">&#x2705; '+impPrev.length+' expenses ready to import</div>'+impPrev.slice(0,20).map(function(m){return'<div class="preview-row"><div><span class="exp-cat">'+m.category+'</span><span style="margin-left:8px;font-size:12px;font-weight:600;">'+m.description+'</span></div><span style="font-weight:700;color:#dc2626;">'+fmt$(m.amount)+'</span></div>';}).join("")+'</div><button class="btn-green" id="btnApplyExp" style="width:100%;padding:12px;font-size:14px;margin-bottom:14px;">&#x2705; Apply '+impPrev.length+' Expenses for '+expMonth+' &middot; '+ENTITIES[expEntity]+'</button>';
   }
-  return'<div class="section-title">EXPENSES</div><div class="section-sub">Monthly operating costs</div><div class="field-wrap"><label class="field-label">Select Month</label><input class="field-input" type="month" id="expMonthSel" value="'+expMonth+'"/></div>'+(monthExp.length>0?'<div class="card" style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-weight:700;font-size:13px;">'+MONTHS[parseInt(expMonth.split("-")[1])-1]+" "+expMonth.split("-")[0]+" Expenses</div><div style=\"font-family:'Bebas Neue',cursive;font-size:20px;color:#dc2626;\">"+fmt$(monthTotal)+'</div></div>'+expList+'</div>':"")+'<div class="card" style="border:1px solid #bfdbfe;"><div style="font-weight:700;font-size:13px;margin-bottom:6px;">&#x1F4C4; Upload P&amp;L PDF</div><div style="font-size:12px;color:#64748b;margin-bottom:10px;">The accountant&#39;s monthly report (scan is fine). The month and expense lines are read automatically; you review them before saving.</div><input type="file" id="pnlFile" accept="application/pdf" style="display:none;"/><button class="btn-primary" id="btnPnlPdf" style="width:100%;padding:11px;"'+(pdfBusy?' disabled':'')+'>'+(pdfBusy?'Reading PDF&hellip; (up to a minute)':'&#x1F4E4; Choose PDF')+'</button></div>'
+  return'<div class="section-title">EXPENSES</div><div class="section-sub">Monthly operating costs &middot; one list per company (the accountant keeps separate P&amp;Ls)</div>'+sqlNote+compBar+'<div class="field-wrap"><label class="field-label">Select Month</label><input class="field-input" type="month" id="expMonthSel" value="'+expMonth+'"/></div>'+(monthExp.length>0?'<div class="card" style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-weight:700;font-size:13px;">'+MONTHS[parseInt(expMonth.split("-")[1])-1]+" "+expMonth.split("-")[0]+" Expenses &middot; "+(expEntity==="mfg"?"JCB Mfg":"JCB LLC")+"</div><div style=\"font-family:'Bebas Neue',cursive;font-size:20px;color:#dc2626;\">"+fmt$(monthTotal)+'</div></div>'+expList+'</div>':"")+'<div class="card" style="border:1px solid #bfdbfe;"><div style="font-weight:700;font-size:13px;margin-bottom:6px;">&#x1F4C4; Upload P&amp;L PDF</div><div style="font-size:12px;color:#64748b;margin-bottom:10px;">The accountant&#39;s monthly report for <strong>'+ENTITIES[expEntity]+'</strong> (scan is fine). The month and expense lines are read automatically; you review them before saving.</div><input type="file" id="pnlFile" accept="application/pdf" style="display:none;"/><button class="btn-primary" id="btnPnlPdf" style="width:100%;padding:11px;"'+(pdfBusy?' disabled':'')+'>'+(pdfBusy?'Reading PDF&hellip; (up to a minute)':'&#x1F4E4; Choose PDF')+'</button></div>'
     +'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px;">&#x1F4CB; Import Expenses</div><div class="hint-box">Paste from your spreadsheet (tab or comma separated):<br><strong>Category &nbsp;|&nbsp; Description &nbsp;|&nbsp; Amount</strong><br><br>Example:<br>Utilities &nbsp;|&nbsp; Electric bill &nbsp;|&nbsp; 145.00<br>Marketing &amp; Advertising &nbsp;|&nbsp; Instagram ads &nbsp;|&nbsp; 250.00</div><div class="field-wrap"><label class="field-label">Paste data here</label><textarea class="field-input" id="expTA" rows="8" style="resize:vertical;line-height:1.8;">'+(impText||"")+'</textarea></div><button class="btn-outline" id="btnPreviewExp" style="width:100%;margin-bottom:10px;padding:11px;">&#x1F50D; Preview Import</button>'+(impMsg?'<div style="font-size:11px;color:#64748b;margin-bottom:10px;">'+impMsg+'</div>':"")+'</div>'+prevHTML;
 }
 
@@ -614,28 +680,57 @@ function profitChannelPrice(cp,p,ch){
   if(cp.series==="JC Walker"&&(ch==="Dealer"||ch==="Distro"))return 10.99;
   return null;
 }
+function costRefProduct(cp){return products.find(function(x){return matchCostProfile(x)===cp;});}
+function unitInfo(cp,p){return'per '+cp.unit+(BUNDLE_BAGS[cp.id]?' &middot; '+BUNDLE_BAGS[cp.id]+' bags':p&&p.pack>1?' &middot; '+p.pack+' baits':'');}
+function profitCell(label,price,cost){
+  if(!price)return'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:6px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;">'+label+'</div><div style="color:#cbd5e1;font-size:12px;">&mdash;</div></div>';
+  var pf=price-cost;
+  return'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:6px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;">'+label+' '+fmt$(price)+'</div><div style="font-weight:700;color:#16a34a;font-size:13px;">'+fmt$(pf)+'</div><div style="font-size:10px;color:#64748b;">'+fmtPct(pf/price*100)+'</div></div>';
+}
+// Profit per unit for the selected company at today's costs. LLC/Combined: by sales channel. Manufacturing: its one sale,
+// the baits sold to the LLC. No shipping or card fees.
 function profitTableHTML(){
   var today=localDateStr(new Date());
   var rows=costProfiles.filter(function(cp){return cp.series!=="Bundles"&&cp.series!=="Apparel";}).map(function(cp){
-    var p=products.find(function(x){return matchCostProfile(x)===cp;});if(!p)return"";
-    var cost=getItemCOGS(1,p,undefined,today),exc=getItemExcise(1,p,undefined,today);
-    var cells=PROFIT_CHS.map(function(ch){
-      var pr=profitChannelPrice(cp,p,ch);
-      if(!pr)return'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:6px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;">'+ch+'</div><div style="color:#cbd5e1;font-size:12px;">&mdash;</div></div>';
-      var pf=pr-cost,mg=pf/pr*100;
-      return'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:6px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;">'+ch+' '+fmt$(pr)+'</div><div style="font-weight:700;color:#16a34a;font-size:13px;">'+fmt$(pf)+'</div><div style="font-size:10px;color:#64748b;">'+fmtPct(mg)+'</div></div>';
-    }).join("");
-    return'<div style="padding:10px 0;border-bottom:1px solid #f1f5f9;"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;"><span style="font-weight:700;font-size:13px;">'+cp.name+' <span style="font-size:10px;color:#94a3b8;font-weight:600;">per '+cp.unit+(p.pack>1?' &middot; '+p.pack+' baits':'')+'</span></span><span style="font-size:11px;color:#dc2626;font-weight:700;">cost '+fmt$(cost)+' <span style="color:#94a3b8;font-weight:600;">('+fmt$(cost-exc)+' + '+fmt$(exc)+' excise)</span></span></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">'+cells+'</div></div>';
+    var p=costRefProduct(cp);if(!p)return"";
+    var sp=lineSplit(1,p,undefined,today),cost=entityView(0,sp,entity).cogs;
+    if(entity==="mfg"&&!(sp.buy>0))return"";
+    var costTxt=entity==="mfg"?fmt$(sp.mfgCost)+' to make + '+fmt$(sp.excise)+' excise':entity==="llc"?fmt$(sp.buy)+' from JCB Mfg + '+fmt$(sp.pack)+' bag &amp; bagging':fmt$(cost-sp.excise)+' + '+fmt$(sp.excise)+' excise';
+    var cells=entity==="mfg"?'<div style="display:grid;grid-template-columns:1fr;gap:4px;">'+profitCell("Sold to Johnny Creek Baits",sp.buy,cost)+'</div>'
+      :'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">'+PROFIT_CHS.map(function(ch){return profitCell(ch,profitChannelPrice(cp,p,ch),cost);}).join("")+'</div>';
+    return'<div style="padding:10px 0;border-bottom:1px solid #f1f5f9;"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px;"><span style="font-weight:700;font-size:13px;">'+cp.name+' <span style="font-size:10px;color:#94a3b8;font-weight:600;">'+unitInfo(cp,p)+'</span></span><span style="font-size:11px;color:#dc2626;font-weight:700;">cost '+fmt$(cost)+' <span style="color:#94a3b8;font-weight:600;">('+costTxt+')</span></span></div>'+cells+'</div>';
   }).join("");
-  return'<div class="section-title">PROFIT PER UNIT</div><div class="section-sub">By bait style and channel at today\'s all-in cost (production + excise) &middot; before shipping and card fees</div><div class="card" style="margin-bottom:14px;padding-top:4px;">'+rows+'</div>';
+  var sub=entity==="mfg"?'What JCB Manufacturing makes on the baits it sells Johnny Creek Baits, after excise':entity==="llc"?'What Johnny Creek Baits makes per unit after buying the baits and bagging them':'Both companies together: production + bagging + excise';
+  return'<div class="section-title">PROFIT PER UNIT</div><div class="section-sub">'+sub+' &middot; today&rsquo;s costs &middot; before shipping and card fees</div><div class="card" style="margin-bottom:14px;padding-top:4px;">'+rows+'</div>';
+}
+// Where each unit's cost sits today: Mfg makes the baits and sells them to the LLC (excise on that sale); the LLC adds the
+// bag and bagging. Read-only; figured from the cost profiles below.
+function costBuildHTML(){
+  var today=localDateStr(new Date());
+  var rows=costProfiles.map(function(cp){
+    var p=costRefProduct(cp);
+    var sp=p?lineSplit(1,p,undefined,today):{buy:0,pack:Number(cp.cogs)||0,mfgCost:0,excise:0,mfgLabor:0,llcLabor:0};
+    var made=sp.buy>0,tot=sp.mfgCost+sp.pack+sp.excise,lab=sp.mfgLabor+sp.llcLabor;
+    var dash='<span style="color:#cbd5e1;">&mdash;</span>';
+    return'<tr><td>'+cp.name+'<span class="sub">'+unitInfo(cp,p)+(lab>0?' &middot; '+fmt$(lab)+' owner labor':'')+'</span></td><td>'+(made?fmt$(sp.mfgCost):dash)+'</td><td style="color:#7c3aed;">'+(made?fmt$(sp.buy):dash)+'</td><td>'+(sp.excise>0?fmt$(sp.excise):dash)+'</td><td>'+(sp.pack>0?fmt$(sp.pack):dash)+'</td><td style="font-weight:700;">'+fmt$(tot)+'</td></tr>';
+  }).join("");
+  return'<div class="section-title">WHERE THE COST SITS</div><div class="section-sub">Per unit today &middot; JCB Manufacturing makes the baits and sells them to Johnny Creek Baits (excise is on that sale) &middot; the LLC adds the bag and bagging labor</div>'
+    +'<div class="card" style="margin-bottom:14px;overflow-x:auto;"><table class="cost-tbl"><thead><tr><th>Product</th><th>Mfg cost<span class="sub">to make</span></th><th>Mfg &rarr; LLC<span class="sub">price</span></th><th>Excise<span class="sub">Mfg pays</span></th><th>LLC bag<span class="sub">+ bagging</span></th><th>Total<span class="sub">combined</span></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function costsHTML(){
+  var inpStyle='width:84px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#1e293b;font-family:\'DM Sans\',sans-serif;outline:none;';
   var rows=costProfiles.map(function(cp,i){
-    return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">'+cp.name+'</div><div style="font-size:10px;color:#94a3b8;margin-top:1px;">per '+cp.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;"><span style="color:#94a3b8;font-weight:600;font-size:13px;">$</span><input type="number" step="0.01" min="0" value="'+cp.cogs.toFixed(2)+'" data-cpidx="'+i+'" class="cp-inp" style="width:84px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#1e293b;font-family:\'DM Sans\',sans-serif;outline:none;"/><button class="del-btn" data-delcp="'+i+'">&#x2715;</button></div></div>'
-      +(NO_EXCISE_SERIES.indexOf(cp.series)>=0?'':(perBaitCount(cp,null,0)||PER_BAIT_SERIES.indexOf(cp.series)>=0?'<div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#7c3aed;font-weight:600;">From '+PER_BAIT_FROM+': $'+PER_BAIT_RATE.toFixed(2)+'/bait'+(BUNDLE_BAITS[cp.id]?' &times; '+BUNDLE_BAITS[cp.id]+' baits = $'+(PER_BAIT_RATE*BUNDLE_BAITS[cp.id]).toFixed(2):' &times; baits in the bag (8-bait bag $'+(PER_BAIT_RATE*8).toFixed(2)+')')+' &middot; before: price below</div>'
-        :hasFirstSale(cp)?'<div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#7c3aed;font-weight:600;">From '+PER_BAIT_FROM+': cost + '+Math.round(TRANSFER_MARKUP*100)+'% = $'+(Math.round(Number(cp.cogs)*(1+TRANSFER_MARKUP)*100)/100).toFixed(2)+' &middot; excise '+fmt$(EXCISE_RATE*Math.round(Number(cp.cogs)*(1+TRANSFER_MARKUP)*100)/100)+' &middot; before: price below</div>':'')+'<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:-4px 0 8px;font-size:10px;color:#94a3b8;">First sale to LLC (excise base) $<input type="number" step="0.01" min="0" value="'+(hasFirstSale(cp)?Number(cp.first_sale).toFixed(2):"")+'" placeholder="not set" data-fsidx="'+i+'" class="fs-inp" style="width:70px;background:#f8fafc;border:1px solid '+(hasFirstSale(cp)?"#e2e8f0":"#fca5a5")+';border-radius:8px;padding:4px 6px;font-size:12px;font-weight:700;text-align:right;"/>'+(hasFirstSale(cp)?' <span style="color:#7c3aed;font-weight:700;">excise '+fmt$(EXCISE_RATE*Number(cp.first_sale))+'</span>':'')+'</div>');
+    return'<div class="exp-item" style="align-items:center;"><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">'+cp.name+'</div><div style="font-size:10px;color:#94a3b8;margin-top:1px;">'+unitInfo(cp,costRefProduct(cp))+'</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0;"><span style="color:#94a3b8;font-weight:600;font-size:13px;">$</span><input type="number" step="0.01" min="0" value="'+Number(cp.cogs).toFixed(2)+'" data-cpidx="'+i+'" class="cp-inp" style="'+inpStyle+'"/><button class="del-btn" data-delcp="'+i+'">&#x2715;</button></div></div>';
   }).join("");
-  return profitTableHTML()+'<div class="section-title">COST PROFILES</div><div class="section-sub">Cost to produce per unit (no excise; soft plastics + bundles from '+COGS_FROM+', earlier orders keep the old $0.67/bag BOM) &middot; first-sale price = what JCB Manufacturing charges Johnny Creek Baits; excise is 10% of it &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
+  // First-sale prices only matter for orders before PER_BAIT_FROM now (soft plastics $0.10/bait, others cost + 20% after)
+  var fsRows=costProfiles.filter(function(cp){return NO_EXCISE_SERIES.indexOf(cp.series)<0;}).map(function(cp){
+    var i=costProfiles.indexOf(cp);
+    return'<div class="exp-item" style="align-items:center;"><div style="flex:1;min-width:0;font-size:12px;font-weight:600;">'+cp.name+'</div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:11px;color:#94a3b8;">$<input type="number" step="0.01" min="0" value="'+(hasFirstSale(cp)?Number(cp.first_sale).toFixed(2):"")+'" placeholder="not set" data-fsidx="'+i+'" class="fs-inp" style="width:70px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:4px 6px;font-size:12px;font-weight:700;text-align:right;"/><span style="width:72px;text-align:right;color:#7c3aed;font-weight:700;">'+(hasFirstSale(cp)?'excise '+fmt$(EXCISE_RATE*Number(cp.first_sale)):'')+'</span></div></div>';
+  }).join("");
+  var oldCard='<details class="card" style="margin-bottom:10px;"><summary style="font-weight:700;font-size:13px;cursor:pointer;">&#x1F570;&#xFE0F; Before '+COGS_FROM+' (old orders only)</summary><div style="font-size:11px;color:#64748b;margin:8px 0;line-height:1.6;">Orders before '+COGS_FROM+' keep the old flat BOM ($0.67/bag soft plastics) and JCB Manufacturing&rsquo;s old price for finished bags below (excise = 10% of it). From '+PER_BAIT_FROM+' the price is automatic: $'+PER_BAIT_RATE.toFixed(2)+' per soft-plastic bait, cost + '+Math.round(TRANSFER_MARKUP*100)+'% for everything else.</div>'+fsRows+'</details>';
+  var addCard='<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
+  return entityBarHTML()+profitTableHTML()+costBuildHTML()
+    +'<div class="section-title">EDIT COSTS</div><div class="section-sub">Full cost to produce one unit, both companies (baits + bag + bagging labor, no excise) &middot; from the &ldquo;JCB Bait COGS&rdquo; sheet &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div>'+oldCard+addCard;
 }
 
 function getYTDLogs(){
@@ -645,7 +740,7 @@ function getYTDLogs(){
 function getYTDExpenses(){
   if(!expReady)return[];
   var y=String(new Date().getFullYear());
-  return expenses.filter(function(e){return e.month&&e.month.startsWith(y)&&e.category!==EXCISE_CAT;});
+  return expenses.filter(function(e){return e.month&&e.month.startsWith(y)&&e.category!==EXCISE_CAT&&entityExp(e);});
 }
 
 function reportHTML(){
@@ -667,27 +762,15 @@ function reportHTML(){
   // Units by product (aggregate across items + legacy single-product logs)
   var byProduct={};
   fl.forEach(function(l){
-    var items=parseItems(l.items);
     var isSponsor=(l.ch==="Sponsorship/Promo");
-    if(items.length>0){
-      items.forEach(function(item){
-        var p=products.find(function(x){return x.id===item.pid;});
-        var key=(p&&p.name)||item.name||"Unknown";
-        if(!byProduct[key])byProduct[key]={units:0,sponsorUnits:0,rev:0,cogs:0};
-        byProduct[key].units+=item.qty;
-        if(isSponsor)byProduct[key].sponsorUnits+=item.qty;
-        byProduct[key].rev+=item.qty*(item.price||0);
-        byProduct[key].cogs+=getItemCOGS(item.qty,p,item.baits,l.date);
-      });
-    }else{
-      var p=products.find(function(x){return x.id===l.pid;});
-      var key=(p&&p.name)||l.pid||"Unknown";
+    calcOrderLines(l,products).forEach(function(x){
+      var p=x.pid!=null?products.find(function(y){return y.id===x.pid;}):null;
+      var key=(p&&p.name)||x.name||"Unknown";
       if(!byProduct[key])byProduct[key]={units:0,sponsorUnits:0,rev:0,cogs:0};
-      byProduct[key].units+=l.qty;
-      if(isSponsor)byProduct[key].sponsorUnits+=l.qty;
-      byProduct[key].rev+=l.qty*(l.price||0);
-      byProduct[key].cogs+=getItemCOGS(l.qty,p,undefined,l.date);
-    }
+      byProduct[key].units+=x.qty;
+      if(isSponsor)byProduct[key].sponsorUnits+=x.qty;
+      byProduct[key].rev+=x.rev;byProduct[key].cogs+=x.cogs;
+    });
   });
 
   // Sponsorship totals
@@ -698,7 +781,6 @@ function reportHTML(){
       rSponsorUnits+=parseItems(l.items).reduce(function(acc,i){return acc+i.qty;},0)||l.qty;
     }
   });
-  var rPaidCogs=s.cogs-s.excise-rSponsorCogs;
 
   var netColor=s.net>=0?"#2563eb":"#dc2626";
   var netBg=s.net>=0?"#eff6ff":"#fef2f2";
@@ -713,10 +795,7 @@ function reportHTML(){
     return'<div class="pl-row"><span style="color:#475569;">'+e[0]+'</span><span style="font-weight:600;">-'+fmt$(e[1])+'</span></div>';
   }).join("");
 
-  var rCogsRows=(rPaidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;">-'+fmt$(rPaidCogs)+'</span></div>':'')
-    +(rSponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship / Promo Cost</span><span style="font-weight:600;">-'+fmt$(rSponsorCogs)+'</span></div>':'')
-    +(s.excise>0?'<div class="pl-row"><span style="color:#475569;">Federal Excise Tax (10% of first sale)</span><span style="font-weight:600;">-'+fmt$(s.excise)+'</span></div>':'')
-    +ownerLaborNoteHTML(s);
+  var rCogsRows=cogsRowsHTML(s,rSponsorCogs,false);
 
   var rSponsorNote=rSponsorUnits>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Units given away (Sponsorship/Promo)</span><span style="color:#94a3b8;font-weight:600;">'+rSponsorUnits+' units &middot; '+fmt$(rSponsorCogs)+' cost</span></div>':'';
 
@@ -753,16 +832,16 @@ function reportHTML(){
     +'</div>';
   }).join("");
 
-  return periodBarHTML()
+  return entityBarHTML()+periodBarHTML()
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;" class="no-print">'
-      +'<div><div class="section-title">SHAREHOLDER REPORT</div><div class="section-sub">Johnny Creek Baits &middot; '+periodLabel()+'</div></div>'
+      +'<div><div class="section-title">SHAREHOLDER REPORT</div><div class="section-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+'</div></div>'
       +'<button class="btn-outline" id="btnPrint">&#x1F5A8;&#xFE0F; Print / Save PDF</button>'
     +'</div>'
     +'<div class="card">'
-      +'<div style="font-family:\'Bebas Neue\',cursive;font-size:20px;color:#ea580c;letter-spacing:2px;margin-bottom:4px;">JOHNNY CREEK BAITS</div>'
+      +'<div style="font-family:\'Bebas Neue\',cursive;font-size:20px;color:#ea580c;letter-spacing:2px;margin-bottom:4px;">'+(entity==="mfg"?"JCB MANUFACTURING":entity==="llc"?"JOHNNY CREEK BAITS, LLC":"JOHNNY CREEK BAITS &middot; BOTH COMPANIES")+'</div>'
       +'<div style="font-size:12px;color:#94a3b8;margin-bottom:16px;">Financial Report &middot; '+periodLabel()+'</div>'
       +ytdPanel
-      +'<div class="pl-section-hd">Revenue by Channel</div>'
+      +'<div class="pl-section-hd">'+(entity==="mfg"?'Sales to Johnny Creek Baits (by where the bags sold)':'Revenue by Channel')+'</div>'
       +(revRows||'<div style="font-size:12px;color:#94a3b8;padding:6px 0;">No orders in this period</div>')
       +'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div>'
       +'<div class="pl-section-hd">Cost of Goods Sold</div>'
@@ -1174,12 +1253,22 @@ function wire(){
   if(activeTab==="tr")wireTransfers();
   document.querySelectorAll(".tab").forEach(function(b){b.onclick=function(){activeTab=b.dataset.tab;render();};});
   document.querySelectorAll("[data-period]").forEach(function(b){b.onclick=function(){period=b.dataset.period;render();};});
+  document.querySelectorAll("[data-entity]").forEach(function(b){b.onclick=function(){entity=b.dataset.entity;try{localStorage.setItem("jcb_entity",entity);}catch(e){}render();};});
   var lo=document.getElementById("btnLogout");if(lo)lo.onclick=function(){localStorage.removeItem("jcb_finance_auth");showLogin();};
   var pr=document.getElementById("btnPrint");if(pr)pr.onclick=function(){window.print();};
   var at=document.getElementById("arTile");if(at)at.onclick=showARModal;
   document.querySelectorAll("[data-ordch]").forEach(function(b){b.onclick=function(){ordCh=b.dataset.ordch;render();};});
   var os=document.getElementById("ordSort");if(os)os.onchange=function(e){ordSort=e.target.value;render();};
   document.querySelectorAll("[data-ordrow]").forEach(function(c){c.onclick=function(){var id=c.dataset.ordrow;ordOpen[id]=!ordOpen[id];var y=window.scrollY;render();window.scrollTo(0,y);};});
+  document.querySelectorAll("[data-expent]").forEach(function(b){b.onclick=function(){expEntity=b.dataset.expent;render();};});
+  document.querySelectorAll("[data-expmove]").forEach(function(b){
+    b.onclick=function(){
+      var id=parseInt(b.dataset.expmove),e=expenses.find(function(x){return x.id===id;});if(!e)return;
+      var to=expEntityOf(e)==="llc"?"mfg":"llc";b.disabled=true;
+      dbPatch("expenses","id=eq."+id,{entity:to}).then(function(){e.entity=to;showToast("Moved to "+ENTITIES[to]);render();})
+        .catch(function(err){b.disabled=false;showToast("Error: "+err.message,"err");});
+    };
+  });
   var ems=document.getElementById("expMonthSel");if(ems)ems.onchange=function(e){expMonth=e.target.value;impPrev=null;impMsg="";impText="";render();};
   var ta=document.getElementById("expTA");if(ta)ta.oninput=function(e){impText=e.target.value;};
   var bpe=document.getElementById("btnPreviewExp");
@@ -1219,7 +1308,7 @@ function wire(){
           var label=MONTHS[parseInt(expMonth.split("-")[1])-1]+" "+expMonth.split("-")[0]+" P&L";
           impPrev=j.lines.filter(function(l){return Number(l.amount)!==0;}).map(function(l){return{id:Date.now()+(Math.random()*99999|0),month:expMonth,category:l.category,description:label,amount:Math.round(Number(l.amount)*100)/100,created_by:"P&L PDF"};});
           if(!impPrev.length)impPrev=null;
-          var existing=expenses.filter(function(e){return e.month===expMonth;}).length;
+          var existing=expenses.filter(function(e){return e.month===expMonth&&expEntityOf(e)===expEntity;}).length;
           impMsg="Read "+(impPrev?impPrev.length:0)+" lines for "+label.replace(" P&L","")+" &middot; total "+fmt$(j.sum)+" vs report "+fmt$(j.printed_total)
             +(j.matches?' <span style="color:#16a34a;font-weight:700;">&#x2713; matches</span>':' <span style="color:#dc2626;font-weight:700;">&#x26A0; does not match the report total &mdash; check the lines before applying</span>')
             +(existing?'<br><span style="color:#dc2626;font-weight:700;">&#x26A0; '+existing+' expenses are already saved for this month &mdash; applying adds these on top.</span>':'');
@@ -1234,6 +1323,7 @@ function wire(){
   var bae=document.getElementById("btnApplyExp");
   if(bae)bae.onclick=function(){
     if(!impPrev||!impPrev.length)return;
+    if(expHasEntity)impPrev.forEach(function(r){r.entity=expEntity;});
     dbPost("expenses",impPrev).then(function(){
       showToast("Saved "+impPrev.length+" expenses!");
       expenses=expenses.concat(impPrev);

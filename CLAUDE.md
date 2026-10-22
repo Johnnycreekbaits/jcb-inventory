@@ -155,6 +155,18 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - POs default to the first-sale price (else cost + markup) and show excise owed; Transfers tab has a quarterly excise card
   (owed = 10% of PO value by po_date, paid = excise expenses) for Form 720.
 
+## Two companies (profit.html, from 2026-10-22)
+- Company switch (`entity`: combined / llc / mfg, saved in `localStorage.jcb_entity`) on Dashboard, Orders, P&L, Costs, Report.
+  Sales by Product stays Combined. `lineSplit()` splits each order line: `buy` = first-sale value (Mfg revenue = LLC's purchase),
+  `pack` = LLC bag + bagging (`BAG_COST` per bag it fills, soft plastics + `BUNDLE_BAGS`, from `COGS_FROM` only), `mfgCost` = rest of
+  production cost, excise = Mfg's. Items with no first sale (Apparel, Swim Bait) are the LLC's alone. `entityView()` gives a
+  company's rev/cogs/labor; `calcOrderLines/calcOrder(log,prods,ent)` default to the selected company.
+- Both companies are figured on what was SOLD in the period (same basis as excise), NOT on POs (none exist yet; most past
+  production was + taps), so LLC + Mfg = Combined exactly (verified every period). POs stay the billing record.
+- Mfg view drops shipping + Shopify fees (LLC's) and hides AR / inventory / shipping tiles.
+- `expenses.entity` ('llc' | 'mfg', SQL `supabase/sql/2026-10-22_expense_entity.sql`); untagged = LLC. Expenses tab has a company
+  picker, per-row move button, imports tagged with the picked company. Excise payments stay out of operating expenses.
+
 ## Key Functions / Architecture
 - `parseItems(raw)` — handles both `log.items` formats
 - `matchCostProfile(prod)` — matches series first, then name substring
@@ -370,3 +382,10 @@ with the code. Update the sections above if architecture changed.
   bagging; before Oct 21 old BOM $0.11/bag; XG8 $35; Walker none), `getItemLabor`, `calcSummary().labor/cashNet`. Verified COGS
   totals identical to before (all time $8,760.37). Next (agreed in principle): company switch Mfg / LLC / Combined, expenses tagged
   by company (accountant keeps separate P&Ls), Costs tab rebuild (fixes overlap), charts, per-company shareholder reports.
+- **2026-10-22 (company switch + Costs rebuild)** — Thomas: accountant keeps separate P&Ls for JCB Manufacturing and Johnny Creek
+  Baits LLC; wants the finance app as their own QuickBooks (P&L per company + combined, charts, per-company shareholder reports;
+  no double-entry). Built the company switch (see "Two companies"). Costs tab rebuilt: Profit Per Unit per company, "Where the
+  cost sits" table (Mfg cost / Mfg→LLC price / excise / LLC bag+bagging / total), clean Edit Costs list, old first-sale prices
+  moved into a "Before Oct 21" fold (fixes the overlapping rows). Verified in headless Chrome: Combined identical to before for 5
+  periods; LLC + Mfg gross = Combined gross to the cent; all 8 tabs × 3 companies render with no errors. Finding: at $0.10/bait Mfg
+  barely covers cost on Hawg/Craw and loses money on Terp Minnow (flagged to Thomas). Next: charts, per-company shareholder report polish.
