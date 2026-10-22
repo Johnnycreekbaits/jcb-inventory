@@ -353,3 +353,11 @@ with the code. Update the sections above if architecture changed.
 - **2026-10-22 (Candice + finance password)** — Added Candice to the "Who is using this device?" pickers (inventory login
   screen + batch made-by list; finance Transfers user picker). Finance password reset by Thomas (new `PW_HASH`; password
   itself is NOT in this repo). Devices already logged in stay logged in (localStorage flag).
+- **2026-10-22 (per-style COGS)** — New Drive sheet "JCB Bait COGS (as of Oct 2026)" (id 1C3uMswkCgM5q2HgVHjZ94c5qUo1mbS8tibv3V57RzyM;
+  per-style tabs from grams/bait, baits/shot, cycle time). Soft plastics now cost per style from `COGS_FROM` 2026-10-21 (Thomas
+  chose a start date over restating): `OLD_COGS` keeps the old flat values (and `OLD_BAG_COST` $0.20) for earlier orders;
+  `BAG_COST` is now $0.38 (bag $0.18 + bagging labor $0.20). `bagCOGS` takes the order date. Cost profiles updated in Supabase
+  + `DEFAULT_COSTS` (see CLAUDE.local.md); bundles re-figured from their components. Soft Jerk = the sheet's Fluke tab (Thomas).
+  Stick Bait specs (54/shot, 170 s) entered in the sheet by Claude from Thomas. Costs tab has a new Profit Per Unit table (style ×
+  DTC / Pro Staff / Dealer / Distro at today's all-in cost; soft-plastic wholesale tiers apply to Paddle Tail too). Verified in
+  headless Chrome: 80 orders before Oct 21 have identical COGS; 5 orders dated Oct 21–22 use the new costs.

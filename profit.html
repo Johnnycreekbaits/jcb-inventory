@@ -87,18 +87,19 @@ function dbPatch(t,f,b){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"PATCH",
 function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
 
 var DEFAULT_COSTS=[
-  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.67,first_sale:1.10},
-  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.67,first_sale:1.10},
+  // Soft plastics: "JCB Bait COGS (as of Oct 2026)" all-in per bag minus its excise line (excise is added separately)
+  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.77,first_sale:1.10},
+  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.80,first_sale:1.10},
   {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.67,first_sale:1.10},
-  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.67,first_sale:1.10},
-  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:0.67,first_sale:1.10},
-  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.67,first_sale:1.10},
-  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:0.67,first_sale:1.10},
-  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.67,first_sale:1.10},
+  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.73,first_sale:1.10},
+  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:0.86,first_sale:1.10},
+  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.77,first_sale:1.10}, // = Fluke tab
+  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:0.90,first_sale:1.10},
+  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.75,first_sale:1.10},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.50,first_sale:2.46},
-  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:4.69,first_sale:7.70},
-  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:6.70,first_sale:11.00},   // 10 bags × $0.67 / × $1.10
-  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:10.05,first_sale:16.50}, // 15 bags
+  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:4.90,first_sale:7.70}, // 7 Neko/Finesse bags ≈ $0.70
+  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:7.24,first_sale:11.00},   // 4 Finesse, 3 Hawg, 3 Paddle Tail
+  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:11.30,first_sale:16.50}, // Creek + 2 Soft Jerk, 2 Stick, 1 Craw
   {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
   {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
   {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
@@ -166,11 +167,17 @@ function matchCostProfile(prod){
 }
 // Custom-order bags (items[].baits) hold a different bait count than the product's pack: the bag itself is a fixed
 // cost, the rest of a bag's COGS scales with the number of baits in it.
-var BAG_COST=0.20; // average bag cost on the BOM sheet (old bags $0.24, new $0.16)
-function bagCOGS(cp,prod,baits){
-  var c=Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
+var BAG_COST=0.38; // per-bag fixed cost on "JCB Bait COGS (as of Oct 2026)": bag $0.18 + bagging labor $0.20
+// From COGS_FROM each soft-plastic style has its own cost (cost_profiles.cogs, from the "JCB Bait COGS" sheet). Orders
+// before that date keep the old flat BOM ($0.67/bag, $0.20 bag) so past months don't restate. No date = today.
+var COGS_FROM="2026-10-21",OLD_BAG_COST=0.20;
+var OLD_COGS={"baby-hawg":0.67,"craw":0.67,"finesse-worm":0.67,"neko":0.67,"stickbait":0.67,"soft-jerk":0.67,"terp-minnow":0.67,"paddle-tail":0.67,
+  "variety-pack":4.69,"creek-box":6.70,"season-box":10.05};
+function isOldCOGS(cp,date){return OLD_COGS[cp.id]!==undefined&&(date||localDateStr(new Date()))<COGS_FROM;}
+function bagCOGS(cp,prod,baits,date){
+  var old=isOldCOGS(cp,date),c=old?OLD_COGS[cp.id]:Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
   if(!baits||!pack||baits===pack||cp.unit!=="bag")return c;
-  var bag=Math.min(BAG_COST,c);return bag+(c-bag)*baits/pack;
+  var bag=Math.min(old?OLD_BAG_COST:BAG_COST,c);return bag+(c-bag)*baits/pack;
 }
 // Federal excise on lures: 10% of the FIRST sale (JCB Manufacturing → Johnny Creek Baits, LLC). cost_profiles.first_sale
 // = that transfer price per unit (soft plastics $1.10/bag). Custom-size bags prorate by bait count. Not set → no excise.
@@ -202,7 +209,7 @@ function firstSalePrice(cp,prod,baits,date){
 }
 function getItemExcise(qty,prod,baits,date){var cp=matchCostProfile(prod);return cp?EXCISE_RATE*firstSalePrice(cp,prod,baits,date)*qty:0;}
 // COGS = production cost (BOM, no excise) + excise, so every margin includes the tax
-function getItemCOGS(qty,prod,baits,date){var cp=matchCostProfile(prod);return cp?bagCOGS(cp,prod,baits)*qty+getItemExcise(qty,prod,baits,date):0;}
+function getItemCOGS(qty,prod,baits,date){var cp=matchCostProfile(prod);return cp?bagCOGS(cp,prod,baits,date)*qty+getItemExcise(qty,prod,baits,date):0;}
 function isInvoiceCh(ch){return ch==="Dealer"||ch==="Distro"||ch==="Custom";}
 function calcInventoryValue(){var total=0;products.forEach(function(p){if(p.series==="Bundles")return;var cp=matchCostProfile(p);if(cp)total+=p.qty*cp.cogs;});return total;}
 function calcAccountsReceivable(){
@@ -575,13 +582,37 @@ function expHTML(){
     +'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px;">&#x1F4CB; Import Expenses</div><div class="hint-box">Paste from your spreadsheet (tab or comma separated):<br><strong>Category &nbsp;|&nbsp; Description &nbsp;|&nbsp; Amount</strong><br><br>Example:<br>Utilities &nbsp;|&nbsp; Electric bill &nbsp;|&nbsp; 145.00<br>Marketing &amp; Advertising &nbsp;|&nbsp; Instagram ads &nbsp;|&nbsp; 250.00</div><div class="field-wrap"><label class="field-label">Paste data here</label><textarea class="field-input" id="expTA" rows="8" style="resize:vertical;line-height:1.8;">'+(impText||"")+'</textarea></div><button class="btn-outline" id="btnPreviewExp" style="width:100%;margin-bottom:10px;padding:11px;">&#x1F50D; Preview Import</button>'+(impMsg?'<div style="font-size:11px;color:#64748b;margin-bottom:10px;">'+impMsg+'</div>':"")+'</div>'+prevHTML;
 }
 
+// Profit per unit by channel at today's all-in cost (production + excise). Soft plastics use the wholesale tiers for every
+// style (Paddle Tail's 6-bait bag included); hard baits only where a channel price is set. No shipping or card fees.
+var PROFIT_CHS=["DTC","Pro Staff","Dealer","Distro"],SOFT_PRICES={"Pro Staff":5.00,"Dealer":3.50,"Distro":2.80};
+function profitChannelPrice(cp,p,ch){
+  if(ch==="DTC")return Number(p.price)||null;
+  if(PER_BAIT_SERIES.indexOf(cp.series)>=0)return SOFT_PRICES[ch];
+  if(cp.series==="JC Walker"&&(ch==="Dealer"||ch==="Distro"))return 10.99;
+  return null;
+}
+function profitTableHTML(){
+  var today=localDateStr(new Date());
+  var rows=costProfiles.filter(function(cp){return cp.series!=="Bundles"&&cp.series!=="Apparel";}).map(function(cp){
+    var p=products.find(function(x){return matchCostProfile(x)===cp;});if(!p)return"";
+    var cost=getItemCOGS(1,p,undefined,today),exc=getItemExcise(1,p,undefined,today);
+    var cells=PROFIT_CHS.map(function(ch){
+      var pr=profitChannelPrice(cp,p,ch);
+      if(!pr)return'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:6px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;">'+ch+'</div><div style="color:#cbd5e1;font-size:12px;">&mdash;</div></div>';
+      var pf=pr-cost,mg=pf/pr*100;
+      return'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:6px;text-align:center;"><div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;">'+ch+' '+fmt$(pr)+'</div><div style="font-weight:700;color:#16a34a;font-size:13px;">'+fmt$(pf)+'</div><div style="font-size:10px;color:#64748b;">'+fmtPct(mg)+'</div></div>';
+    }).join("");
+    return'<div style="padding:10px 0;border-bottom:1px solid #f1f5f9;"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;"><span style="font-weight:700;font-size:13px;">'+cp.name+' <span style="font-size:10px;color:#94a3b8;font-weight:600;">per '+cp.unit+(p.pack>1?' &middot; '+p.pack+' baits':'')+'</span></span><span style="font-size:11px;color:#dc2626;font-weight:700;">cost '+fmt$(cost)+' <span style="color:#94a3b8;font-weight:600;">('+fmt$(cost-exc)+' + '+fmt$(exc)+' excise)</span></span></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;">'+cells+'</div></div>';
+  }).join("");
+  return'<div class="section-title">PROFIT PER UNIT</div><div class="section-sub">By bait style and channel at today\'s all-in cost (production + excise) &middot; before shipping and card fees</div><div class="card" style="margin-bottom:14px;padding-top:4px;">'+rows+'</div>';
+}
 function costsHTML(){
   var rows=costProfiles.map(function(cp,i){
     return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">'+cp.name+'</div><div style="font-size:10px;color:#94a3b8;margin-top:1px;">per '+cp.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;"><span style="color:#94a3b8;font-weight:600;font-size:13px;">$</span><input type="number" step="0.01" min="0" value="'+cp.cogs.toFixed(2)+'" data-cpidx="'+i+'" class="cp-inp" style="width:84px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;text-align:right;color:#1e293b;font-family:\'DM Sans\',sans-serif;outline:none;"/><button class="del-btn" data-delcp="'+i+'">&#x2715;</button></div></div>'
       +(NO_EXCISE_SERIES.indexOf(cp.series)>=0?'':(perBaitCount(cp,null,0)||PER_BAIT_SERIES.indexOf(cp.series)>=0?'<div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#7c3aed;font-weight:600;">From '+PER_BAIT_FROM+': $'+PER_BAIT_RATE.toFixed(2)+'/bait'+(BUNDLE_BAITS[cp.id]?' &times; '+BUNDLE_BAITS[cp.id]+' baits = $'+(PER_BAIT_RATE*BUNDLE_BAITS[cp.id]).toFixed(2):' &times; baits in the bag (8-bait bag $'+(PER_BAIT_RATE*8).toFixed(2)+')')+' &middot; before: price below</div>'
         :hasFirstSale(cp)?'<div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#7c3aed;font-weight:600;">From '+PER_BAIT_FROM+': cost + '+Math.round(TRANSFER_MARKUP*100)+'% = $'+(Math.round(Number(cp.cogs)*(1+TRANSFER_MARKUP)*100)/100).toFixed(2)+' &middot; excise '+fmt$(EXCISE_RATE*Math.round(Number(cp.cogs)*(1+TRANSFER_MARKUP)*100)/100)+' &middot; before: price below</div>':'')+'<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:-4px 0 8px;font-size:10px;color:#94a3b8;">First sale to LLC (excise base) $<input type="number" step="0.01" min="0" value="'+(hasFirstSale(cp)?Number(cp.first_sale).toFixed(2):"")+'" placeholder="not set" data-fsidx="'+i+'" class="fs-inp" style="width:70px;background:#f8fafc;border:1px solid '+(hasFirstSale(cp)?"#e2e8f0":"#fca5a5")+';border-radius:8px;padding:4px 6px;font-size:12px;font-weight:700;text-align:right;"/>'+(hasFirstSale(cp)?' <span style="color:#7c3aed;font-weight:700;">excise '+fmt$(EXCISE_RATE*Number(cp.first_sale))+'</span>':'')+'</div>');
   }).join("");
-  return'<div class="section-title">COST PROFILES</div><div class="section-sub">Cost to produce per unit (no excise) &middot; first-sale price = what JCB Manufacturing charges Johnny Creek Baits; excise is 10% of it &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
+  return profitTableHTML()+'<div class="section-title">COST PROFILES</div><div class="section-sub">Cost to produce per unit (no excise; soft plastics + bundles from '+COGS_FROM+', earlier orders keep the old $0.67/bag BOM) &middot; first-sale price = what JCB Manufacturing charges Johnny Creek Baits; excise is 10% of it &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div><div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
 }
 
 function getYTDLogs(){
