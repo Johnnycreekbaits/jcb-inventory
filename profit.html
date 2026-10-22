@@ -173,6 +173,20 @@ var BAG_COST=0.38; // per-bag fixed cost on "JCB Bait COGS (as of Oct 2026)": ba
 var COGS_FROM="2026-10-21",OLD_BAG_COST=0.20;
 var OLD_COGS={"baby-hawg":0.67,"craw":0.67,"finesse-worm":0.67,"neko":0.67,"stickbait":0.67,"soft-jerk":0.67,"terp-minnow":0.67,"paddle-tail":0.67,
   "variety-pack":4.69,"creek-box":6.70,"season-box":10.05};
+// Owner labor inside each unit's cost: Mike, Greg and Thomas do all the work unpaid for now, so the P&L shows it as its own
+// line and a cash profit with it added back. From COGS_FROM (sheet): Zorn $40/hr ÷ baits per hour × baits + bagging $0.20/bag.
+// Before: old BOM labor $160 / 12,000 baits × 8 = $0.11/bag (no bagging labor). XG8: $35 labor in its BOM. Walker: none on its BOM.
+var BAGGING_LABOR=0.20;
+var OWNER_LABOR={"finesse-worm":0.36,"neko":0.40,"paddle-tail":0.40,"soft-jerk":0.41,"baby-hawg":0.57,"craw":0.54,"stickbait":0.53,
+  "terp-minnow":0.68,"variety-pack":2.66,"creek-box":4.35,"season-box":6.77,"xg8-glide":35};
+var OLD_OWNER_LABOR={"finesse-worm":0.11,"neko":0.11,"paddle-tail":0.11,"soft-jerk":0.11,"baby-hawg":0.11,"craw":0.11,"stickbait":0.11,
+  "terp-minnow":0.11,"variety-pack":0.75,"creek-box":1.07,"season-box":1.60,"xg8-glide":35};
+function ownerLaborFor(cp,prod,baits,date){
+  var old=isOldCOGS(cp,date),l=(old?OLD_OWNER_LABOR:OWNER_LABOR)[cp.id]||0,pack=prod&&prod.pack>1?prod.pack:0;
+  if(!baits||!pack||baits===pack||cp.unit!=="bag")return l;
+  var bag=old?0:BAGGING_LABOR;return bag+(l-bag)*baits/pack;
+}
+function getItemLabor(qty,prod,baits,date){var cp=matchCostProfile(prod);return cp?ownerLaborFor(cp,prod,baits,date)*qty:0;}
 function isOldCOGS(cp,date){return OLD_COGS[cp.id]!==undefined&&(date||localDateStr(new Date()))<COGS_FROM;}
 function bagCOGS(cp,prod,baits,date){
   var old=isOldCOGS(cp,date),c=old?OLD_COGS[cp.id]:Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
@@ -250,20 +264,20 @@ function calcOrderLines(log,prods){
       var p=prods.find(function(x){return x.id===item.pid;});
       var q=net(item.pid,item.qty);
       lines.push({name:item.name||(p&&p.name)||"Item",color:item.color||(p&&p.color)||"",qty:q,returned:(item.qty||0)-q,baits:item.baits,
-        price:item.price||0,rev:q*(item.price||0),cogs:getItemCOGS(q,p,item.baits,log.date),excise:getItemExcise(q,p,item.baits,log.date)});
+        price:item.price||0,rev:q*(item.price||0),cogs:getItemCOGS(q,p,item.baits,log.date),excise:getItemExcise(q,p,item.baits,log.date),labor:getItemLabor(q,p,item.baits,log.date)});
     });
   }else{
     var p=prods.find(function(x){return x.id===log.pid;});
     var q=net(log.pid,log.qty);
     var price=getChannelPrice(p||{price:log.price||0,pack:8},log.ch||"Retail");
-    lines.push({name:p?p.name:"Item",color:p?p.color:"",qty:q,returned:(log.qty||0)-q,price:price,rev:q*price,cogs:getItemCOGS(q,p,undefined,log.date),excise:getItemExcise(q,p,undefined,log.date)});
+    lines.push({name:p?p.name:"Item",color:p?p.color:"",qty:q,returned:(log.qty||0)-q,price:price,rev:q*price,cogs:getItemCOGS(q,p,undefined,log.date),excise:getItemExcise(q,p,undefined,log.date),labor:getItemLabor(q,p,undefined,log.date)});
   }
   return lines;
 }
 function calcOrder(log,prods){
-  var rev=0,cogs=0,excise=0;
-  calcOrderLines(log,prods).forEach(function(l){rev+=l.rev;cogs+=l.cogs;excise+=l.excise;});
-  return{rev:rev,cogs:cogs,excise:excise};
+  var rev=0,cogs=0,excise=0,labor=0;
+  calcOrderLines(log,prods).forEach(function(l){rev+=l.rev;cogs+=l.cogs;excise+=l.excise;labor+=l.labor;});
+  return{rev:rev,cogs:cogs,excise:excise,labor:labor};
 }
 // Per-sale profit (Orders tab) = revenue − COGS (incl. excise) + shipping net − estimated Shopify card fee.
 // Shopify fees aren't recorded anywhere, so Shopify orders use the standard online rate on what the customer paid.
@@ -318,11 +332,11 @@ function excisePaidNote(){if(!expReady)return"";var ms=getPeriodMonths(),t=0;exp
   return t>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Excise payments entered as expenses ('+fmt$(t)+') are not counted again &mdash; excise is in COGS</span></div>':"";}
 
 function calcSummary(fl,fe){
-  var rev=0,cogs=0,excise=0,expTotal=0;
-  fl.forEach(function(l){var o=calcOrder(l,products);rev+=o.rev;cogs+=o.cogs;excise+=o.excise;});
+  var rev=0,cogs=0,excise=0,labor=0,expTotal=0;
+  fl.forEach(function(l){var o=calcOrder(l,products);rev+=o.rev;cogs+=o.cogs;excise+=o.excise;labor+=o.labor;});
   fe.forEach(function(e){expTotal+=Number(e.amount);});
   var gross=rev-cogs,net=gross-expTotal;
-  return{rev:rev,cogs:cogs,excise:excise,gross:gross,grossPct:rev>0?(gross/rev)*100:0,expenses:expTotal,net:net,netPct:rev>0?(net/rev)*100:0,orders:fl.length};
+  return{rev:rev,cogs:cogs,excise:excise,labor:labor,cashNet:net+labor,gross:gross,grossPct:rev>0?(gross/rev)*100:0,expenses:expTotal,net:net,netPct:rev>0?(net/rev)*100:0,orders:fl.length};
 }
 
 function periodLabel(){
@@ -410,7 +424,7 @@ function dashHTML(){
   if(fl.length===0)return periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+periodLabel()+'</div><div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F4CA;</div><div style="font-weight:600;">No orders in this period</div></div>';
   var netBg=s.net>=0?"background:#eff6ff;border:1px solid #bfdbfe;":"background:#fef2f2;border:1px solid #fecaca;";
   var netColor=s.net>=0?"#2563eb":"#dc2626";
-  return periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+periodLabel()+" &middot; "+s.orders+' orders</div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+fmt$(s.rev)+'</div><div class="kpi-lbl">Revenue</div></div><div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:#16a34a;">'+fmt$(s.gross)+'</div><div class="kpi-lbl">Gross Profit</div><div class="kpi-sub" style="color:#16a34a;">'+fmtPct(s.grossPct)+'</div></div><div class="kpi" style="'+netBg+'"><div class="kpi-val" style="color:'+netColor+';">'+fmt$(s.net)+'</div><div class="kpi-lbl">Net Profit</div><div class="kpi-sub" style="color:'+netColor+';">'+fmtPct(s.netPct)+'</div></div><div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(s.cogs)+'</div><div class="kpi-lbl">COGS</div></div><div class="kpi" style="background:#faf5ff;border:1px solid #e9d5ff;"><div class="kpi-val" style="color:#7c3aed;">'+fmt$(calcInventoryValue())+'</div><div class="kpi-lbl">Inventory Value</div><div class="kpi-sub" style="color:#7c3aed;">at cost &middot; on hand</div></div>'+(function(){var ar=calcAccountsReceivable();return ar.count>0?'<div class="kpi" id="arTile" style="background:#fef2f2;border:1px solid #fecaca;cursor:pointer;"><div class="kpi-val" style="color:#dc2626;">'+fmt$(ar.total)+'</div><div class="kpi-lbl">Receivable</div><div class="kpi-sub" style="color:#dc2626;">'+ar.count+' unpaid &rarr; tap to view</div></div>':'';})()+'</div>'+shippingCardHTML(fl)+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">Revenue by Channel</div>'+chList.map(function(e){var margin=e[1].rev>0?(e[1].rev-e[1].cogs)/e[1].rev*100:0;return'<div class="bar-row"><div class="bar-label"><span style="font-weight:600;">'+e[0]+'</span><span style="color:#ea580c;font-weight:700;">'+fmt$(e[1].rev)+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">'+fmtPct(margin)+'</span></span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+Math.round((e[1].rev/maxRev)*100)+'%;background:#f97316;"></div></div></div>';}).join("")+'</div>';
+  return periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+periodLabel()+" &middot; "+s.orders+' orders</div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+fmt$(s.rev)+'</div><div class="kpi-lbl">Revenue</div></div><div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:#16a34a;">'+fmt$(s.gross)+'</div><div class="kpi-lbl">Gross Profit</div><div class="kpi-sub" style="color:#16a34a;">'+fmtPct(s.grossPct)+'</div></div><div class="kpi" style="'+netBg+'"><div class="kpi-val" style="color:'+netColor+';">'+fmt$(s.net)+'</div><div class="kpi-lbl">Net Profit</div><div class="kpi-sub" style="color:'+netColor+';">'+fmtPct(s.netPct)+'</div>'+(s.labor>0?'<div class="kpi-sub" style="color:#0f766e;">cash '+fmt$(s.cashNet)+' &middot; owner labor unpaid</div>':'')+'</div><div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(s.cogs)+'</div><div class="kpi-lbl">COGS</div></div><div class="kpi" style="background:#faf5ff;border:1px solid #e9d5ff;"><div class="kpi-val" style="color:#7c3aed;">'+fmt$(calcInventoryValue())+'</div><div class="kpi-lbl">Inventory Value</div><div class="kpi-sub" style="color:#7c3aed;">at cost &middot; on hand</div></div>'+(function(){var ar=calcAccountsReceivable();return ar.count>0?'<div class="kpi" id="arTile" style="background:#fef2f2;border:1px solid #fecaca;cursor:pointer;"><div class="kpi-val" style="color:#dc2626;">'+fmt$(ar.total)+'</div><div class="kpi-lbl">Receivable</div><div class="kpi-sub" style="color:#dc2626;">'+ar.count+' unpaid &rarr; tap to view</div></div>':'';})()+'</div>'+shippingCardHTML(fl)+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">Revenue by Channel</div>'+chList.map(function(e){var margin=e[1].rev>0?(e[1].rev-e[1].cogs)/e[1].rev*100:0;return'<div class="bar-row"><div class="bar-label"><span style="font-weight:600;">'+e[0]+'</span><span style="color:#ea580c;font-weight:700;">'+fmt$(e[1].rev)+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">'+fmtPct(margin)+'</span></span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+Math.round((e[1].rev/maxRev)*100)+'%;background:#f97316;"></div></div></div>';}).join("")+'</div>';
 }
 
 // Shipping collected from customers vs. what labels cost us (logs.ship_paid / logs.ship_cost).
@@ -547,6 +561,15 @@ function prodHTML(){
   return periodBarHTML()+'<div class="section-title">SALES BY PRODUCT</div><div class="section-sub">'+periodLabel()+' &middot; '+totalQty+' units sold &amp; distributed (net of returns)'+(trReady?' &middot; '+madeTotal+' made (batches)':'')+'</div>'+rowsHTML+'<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;"><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total COGS</span><span style="color:#dc2626;">'+fmt$(totalCogs)+'</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;"><span>Total Revenue</span><span style="color:#16a34a;">'+fmt$(totalRev)+'</span></div><div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:4px;"><span style="font-weight:700;">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:22px;color:#2563eb;">'+fmt$(totalRev-totalCogs)+'</span></div></div>';
 }
 
+// Owner labor is inside COGS (true cost); these show how much of it is unpaid owner time and the cash profit without it.
+function ownerLaborNoteHTML(s){
+  return s.labor>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Includes owner labor (not paid) &mdash; Zorn $40/hr + bagging $20/hr</span><span style="color:#94a3b8;font-weight:600;">'+fmt$(s.labor)+'</span></div>':'';
+}
+function cashProfitHTML(s){
+  if(!(s.labor>0))return'';
+  var c=s.cashNet>=0?"#0f766e":"#dc2626";
+  return'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin-top:8px;border:1px dashed #99f6e4;border-radius:12px;background:#f0fdfa;"><div><div style="font-weight:700;font-size:13px;color:'+c+';">Cash Profit</div><div style="font-size:10px;color:#64748b;">Net + '+fmt$(s.labor)+' owner labor not paid</div></div><span style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:'+c+';">'+fmt$(s.cashNet)+'</span></div>';
+}
 function plHTML(){
   var fl=getPeriodLogs(),fe=getPeriodExpenses(),s=calcSummary(fl,fe);
   var byChannel={},byCategory={};
@@ -563,8 +586,8 @@ function plHTML(){
   var noExpNote=!expReady?'<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:6px 0;">Expenses table not set up — see Expenses tab</div>':fe.length===0?'<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:6px 0;">No expenses entered for this period</div>':"";
   var sponsorCogs=0;fl.forEach(function(l){if(l.ch==="Sponsorship/Promo"){var o=calcOrder(l,products);sponsorCogs+=o.cogs-o.excise;}});
   var paidCogs=s.cogs-s.excise-sponsorCogs;
-  var cogsRows=(paidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(paidCogs)+'</span></div>':'')+(sponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship Cost</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(sponsorCogs)+'</span></div>':'')+(s.excise>0?'<div class="pl-row"><span style="color:#475569;">Federal Excise Tax <span style="font-size:10px;color:#94a3b8;">10% of first sale</span></span><span style="font-weight:600;color:#dc2626;">-'+fmt$(s.excise)+'</span></div>':'')+excisePaidNote();
-  return periodBarHTML()+'<div class="section-title">PROFIT & LOSS</div><div class="section-sub">'+periodLabel()+'</div><div class="card"><div class="pl-section-hd">Revenue</div>'+revRows+'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div><div class="pl-section-hd">Cost of Goods Sold</div>'+cogsRows+'<div class="pl-total-row"><span>Total COGS</span><span style="color:#dc2626;">-'+fmt$(s.cogs)+'</span></div><div class="profit-box" style="background:'+grossBg+';border:1px solid '+grossBorder+';"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;color:'+grossColor+';">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:'+grossColor+';">'+fmt$(s.gross)+'</span></div><div style="font-size:11px;color:'+grossColor+';margin-top:3px;">'+fmtPct(s.grossPct)+' gross margin</div></div><div class="pl-section-hd">Operating Expenses</div>'+noExpNote+expRows+(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span style="color:#dc2626;">-'+fmt$(s.expenses)+'</span></div>':"")+'<div class="profit-box" style="background:'+netBg+';border:1px solid '+netBorder+';margin-bottom:0;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:30px;color:'+netColor+';">'+fmt$(s.net)+'</span></div><div style="font-size:11px;color:'+netColor+';margin-top:3px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div></div></div>';
+  var cogsRows=(paidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(paidCogs)+'</span></div>':'')+(sponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship Cost</span><span style="font-weight:600;color:#dc2626;">-'+fmt$(sponsorCogs)+'</span></div>':'')+(s.excise>0?'<div class="pl-row"><span style="color:#475569;">Federal Excise Tax <span style="font-size:10px;color:#94a3b8;">10% of first sale</span></span><span style="font-weight:600;color:#dc2626;">-'+fmt$(s.excise)+'</span></div>':'')+ownerLaborNoteHTML(s)+excisePaidNote();
+  return periodBarHTML()+'<div class="section-title">PROFIT & LOSS</div><div class="section-sub">'+periodLabel()+'</div><div class="card"><div class="pl-section-hd">Revenue</div>'+revRows+'<div class="pl-total-row"><span>Total Revenue</span><span>'+fmt$(s.rev)+'</span></div><div class="pl-section-hd">Cost of Goods Sold</div>'+cogsRows+'<div class="pl-total-row"><span>Total COGS</span><span style="color:#dc2626;">-'+fmt$(s.cogs)+'</span></div><div class="profit-box" style="background:'+grossBg+';border:1px solid '+grossBorder+';"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;color:'+grossColor+';">Gross Profit</span><span style="font-family:\'Bebas Neue\',cursive;font-size:24px;color:'+grossColor+';">'+fmt$(s.gross)+'</span></div><div style="font-size:11px;color:'+grossColor+';margin-top:3px;">'+fmtPct(s.grossPct)+' gross margin</div></div><div class="pl-section-hd">Operating Expenses</div>'+noExpNote+expRows+(s.expenses>0?'<div class="pl-total-row"><span>Total Expenses</span><span style="color:#dc2626;">-'+fmt$(s.expenses)+'</span></div>':"")+'<div class="profit-box" style="background:'+netBg+';border:1px solid '+netBorder+';margin-bottom:0;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:700;font-size:15px;color:'+netColor+';">Net '+(s.net>=0?"Profit":"Loss")+'</span><span style="font-family:\'Bebas Neue\',cursive;font-size:30px;color:'+netColor+';">'+fmt$(s.net)+'</span></div><div style="font-size:11px;color:'+netColor+';margin-top:3px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div></div>'+cashProfitHTML(s)+'</div>';
 }
 
 function expHTML(){
@@ -692,7 +715,8 @@ function reportHTML(){
 
   var rCogsRows=(rPaidCogs>0?'<div class="pl-row"><span style="color:#475569;">Product COGS (BOM)</span><span style="font-weight:600;">-'+fmt$(rPaidCogs)+'</span></div>':'')
     +(rSponsorCogs>0?'<div class="pl-row"><span style="color:#475569;">Sponsorship / Promo Cost</span><span style="font-weight:600;">-'+fmt$(rSponsorCogs)+'</span></div>':'')
-    +(s.excise>0?'<div class="pl-row"><span style="color:#475569;">Federal Excise Tax (10% of first sale)</span><span style="font-weight:600;">-'+fmt$(s.excise)+'</span></div>':'');
+    +(s.excise>0?'<div class="pl-row"><span style="color:#475569;">Federal Excise Tax (10% of first sale)</span><span style="font-weight:600;">-'+fmt$(s.excise)+'</span></div>':'')
+    +ownerLaborNoteHTML(s);
 
   var rSponsorNote=rSponsorUnits>0?'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Units given away (Sponsorship/Promo)</span><span style="color:#94a3b8;font-weight:600;">'+rSponsorUnits+' units &middot; '+fmt$(rSponsorCogs)+' cost</span></div>':'';
 
@@ -755,6 +779,7 @@ function reportHTML(){
         +'</div>'
         +'<div style="font-size:11px;color:'+netColor+';margin-top:4px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div>'
       +'</div>'
+      +cashProfitHTML(s)
       +'<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">'
         +'<div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">UNITS SOLD BY PRODUCT</div>'
         +(productRows||'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">No units in this period</div>')

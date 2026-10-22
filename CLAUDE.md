@@ -364,3 +364,9 @@ with the code. Update the sections above if architecture changed.
   Later 2026-10-22 (Thomas): injection labor $40/hr (one person on the Zorn), bagging $20/hr per person (usually 2, 100 bags per
   person-hour → $0.20/bag; all labor is the owners for now), Paddle Tail always 6/bag, excise stays the
   current model ($0.01/bait); sheet excise line now = Inputs $0.01 × baits per bag. Soft plastics $0.75–$1.14/bag production.
+- **2026-10-22 (owner labor)** — Owners (Mike, Greg, Thomas) do all labor unpaid, so labor stays in COGS (true cost) but the
+  P&L + Shareholder Report show "Includes owner labor (not paid)" under COGS and a Cash Profit box (net + owner labor); Dashboard
+  Net Profit tile shows cash too. `OWNER_LABOR` / `OLD_OWNER_LABOR` per cost profile (Zorn $40/hr ÷ baits/hr × baits + $0.20
+  bagging; before Oct 21 old BOM $0.11/bag; XG8 $35; Walker none), `getItemLabor`, `calcSummary().labor/cashNet`. Verified COGS
+  totals identical to before (all time $8,760.37). Next (agreed in principle): company switch Mfg / LLC / Combined, expenses tagged
+  by company (accountant keeps separate P&Ls), Costs tab rebuild (fixes overlap), charts, per-company shareholder reports.
