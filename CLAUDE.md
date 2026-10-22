@@ -405,3 +405,9 @@ with the code. Update the sections above if architecture changed.
   Later 2026-10-22 (Thomas, "safe rule"): soft-plastic price to the LLC = cost/bait × 1.2 ÷ 0.9 (cost + 20% after excise), rounded
   up, floor $0.10 → Terp Minnow $0.13, Stick $0.11, Paddle Tail $0.11 from 2026-10-22; rest stay $0.10 (Hawg/Craw ~20%, just clear).
   Only Shopify #1036/#1037 (today, Paddle Tail) changed: combined excise +$0.042; everything earlier identical.
+- **2026-10-22 (label + COGS sheet channels)** — COGS sheet reworked to the app's channels (Thomas): Inputs "Pricing (per bag)" = DTC
+  $6.99 / Pro Staff $5.00 / Dealer $3.50 / Distro $2.80 + DTC card fee 2.9% + $0.30 per order ÷ bags per order (1); the old $0.80
+  "distro cost" (20% off the old $3.99 dealer price, from Mike's JCB BOMs CBD CRUDE tab) and $0.40 direct cost (5% of old $7.99) removed.
+  Bait tabs + Summary show all 4 channels for combined, LLC and Mfg. Team added a $0.03 label on the sheet → app `LABEL_COST` per
+  LLC-filled bag from `LABEL_FROM` 2026-10-22 (added in `bagCOGS` + LLC `pack`; cost profiles unchanged). Only Shopify #1034/#1036/#1037
+  (today) changed (+$0.03/bag, LLC side).

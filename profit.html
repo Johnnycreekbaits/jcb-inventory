@@ -229,10 +229,14 @@ function ownerLaborFor(cp,prod,baits,date){
 }
 function getItemLabor(qty,prod,baits,date){var cp=matchCostProfile(prod);return cp?ownerLaborFor(cp,prod,baits,date)*qty:0;}
 function isOldCOGS(cp,date){return OLD_COGS[cp.id]!==undefined&&(date||localDateStr(new Date()))<COGS_FROM;}
+// Label on each bag the LLC fills, on top of the cost profile (sheet "JCB Bait COGS", Inputs: Label $0.03; Thomas from 2026-10-22)
+var LABEL_COST=0.03,LABEL_FROM="2026-10-22";
+function labelCost(date){return(date||localDateStr(new Date()))>=LABEL_FROM?LABEL_COST:0;}
 function bagCOGS(cp,prod,baits,date){
   var old=isOldCOGS(cp,date),c=old?OLD_COGS[cp.id]:Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
-  if(!baits||!pack||baits===pack||cp.unit!=="bag")return c;
-  var bag=Math.min(old?OLD_BAG_COST:BAG_COST,c);return bag+(c-bag)*baits/pack;
+  var labels=llcBagsIn(cp,date)*labelCost(date);
+  if(!baits||!pack||baits===pack||cp.unit!=="bag")return c+labels;
+  var bag=Math.min(old?OLD_BAG_COST:BAG_COST,c);return bag+(c-bag)*baits/pack+labels;
 }
 // Federal excise on lures: 10% of the FIRST sale (JCB Manufacturing → Johnny Creek Baits, LLC). cost_profiles.first_sale
 // = that transfer price per unit (soft plastics $1.10/bag). Custom-size bags prorate by bait count. Not set → no excise.
@@ -324,7 +328,7 @@ function lineSplit(q,p,baits,date){
   var c=bagCOGS(cp,p,baits,date)*q,ex=getItemExcise(q,p,baits,date),lab=ownerLaborFor(cp,p,baits,date)*q;
   var fs=NO_EXCISE_SERIES.indexOf(cp.series)>=0?0:firstSalePrice(cp,p,baits,date)*q;
   if(!(fs>0))return{buy:0,pack:c,mfgCost:0,excise:ex,mfgLabor:0,llcLabor:lab};
-  var bags=llcBagsIn(cp,date)*q,pack=Math.min(c,bags*BAG_COST),bl=Math.min(lab,bags*BAGGING_LABOR);
+  var bags=llcBagsIn(cp,date)*q,pack=Math.min(c,bags*(BAG_COST+labelCost(date))),bl=Math.min(lab,bags*BAGGING_LABOR);
   return{buy:fs,pack:pack,mfgCost:c-pack,excise:ex,mfgLabor:lab-bl,llcLabor:bl};
 }
 // A line's numbers as one company sees them
@@ -775,7 +779,7 @@ function costsHTML(){
   var oldCard='<details class="card" style="margin-bottom:10px;"><summary style="font-weight:700;font-size:13px;cursor:pointer;">&#x1F570;&#xFE0F; Before '+COGS_FROM+' (old orders only)</summary><div style="font-size:11px;color:#64748b;margin:8px 0;line-height:1.6;">Orders before '+COGS_FROM+' keep the old flat BOM ($0.67/bag soft plastics) and JCB Manufacturing&rsquo;s old price for finished bags below (excise = 10% of it). From '+PER_BAIT_FROM+' the price is automatic: $'+PER_BAIT_RATE.toFixed(2)+' per soft-plastic bait ('+slowMoldNote()+'), cost + '+Math.round(TRANSFER_MARKUP*100)+'% for everything else.</div>'+fsRows+'</details>';
   var addCard='<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
   return entityBarHTML()+profitTableHTML()+costBuildHTML()
-    +'<div class="section-title">EDIT COSTS</div><div class="section-sub">Full cost to produce one unit, both companies (baits + bag + bagging labor, no excise) &middot; from the &ldquo;JCB Bait COGS&rdquo; sheet &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div>'+oldCard+addCard;
+    +'<div class="section-title">EDIT COSTS</div><div class="section-sub">Full cost to produce one unit, both companies (baits + bag + bagging labor, no excise; the $'+LABEL_COST.toFixed(2)+' label per bag is added on top from '+LABEL_FROM+') &middot; from the &ldquo;JCB Bait COGS&rdquo; sheet &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div>'+oldCard+addCard;
 }
 
 // ── Charts (plain HTML bars so text stays readable at any width) ──
