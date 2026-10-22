@@ -51,6 +51,38 @@ input,select,textarea{font-family:'DM Sans',sans-serif;}
 .cost-tbl td{padding:8px 4px;border-top:1px solid #f1f5f9;text-align:right;white-space:nowrap;}
 .cost-tbl td:first-child{white-space:normal;font-weight:600;}
 .cost-tbl .sub{display:block;font-size:10px;color:#94a3b8;font-weight:500;}
+/* charts */
+.viz-title{font-weight:700;font-size:13px;color:#1e293b;}
+.viz-sub{font-size:11px;color:#94a3b8;margin:2px 0 10px;}
+.viz-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#475569;margin-bottom:10px;}
+.viz-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+.viz-plot{position:relative;padding-left:40px;}
+.viz-area{position:absolute;left:0;right:0;top:0;pointer-events:none;}
+.viz-grid{position:absolute;left:40px;right:0;border-top:1px solid #eeede8;}
+.viz-grid.zero{border-top-color:#c3c2b7;}
+.viz-grid span{position:absolute;left:-40px;width:34px;top:-7px;text-align:right;font-size:10px;color:#898781;font-variant-numeric:tabular-nums;}
+.viz-cols{display:flex;position:relative;}
+.viz-slot{flex:1;min-width:0;cursor:pointer;border-radius:6px;}
+.viz-slot:hover{background:rgba(42,120,214,.06);}
+.viz-bars{display:flex;justify-content:center;gap:2px;position:relative;}
+.viz-colwrap{position:relative;width:14px;max-width:24px;height:100%;}
+.viz-col{position:absolute;left:0;right:0;border-radius:4px 4px 0 0;}
+.viz-col.neg{border-radius:0 0 4px 4px;}
+.viz-x{text-align:center;font-size:10px;color:#898781;margin-top:4px;}
+.viz-hbars{display:flex;flex-direction:column;gap:6px;}
+.viz-hrow{display:grid;grid-template-columns:minmax(90px,34%) 1fr auto;gap:8px;align-items:center;cursor:pointer;border-radius:6px;padding:2px 0;}
+.viz-hrow:hover{background:rgba(42,120,214,.06);}
+.viz-hlabel{font-size:12px;font-weight:600;color:#1e293b;line-height:1.2;}
+.viz-hlabel span{display:block;font-size:10px;color:#94a3b8;font-weight:500;}
+.viz-htrack{position:relative;height:14px;}
+.viz-hbar{position:absolute;top:0;bottom:0;border-radius:0 4px 4px 0;min-width:2px;}
+.viz-hbar.neg{border-radius:4px 0 0 4px;}
+.viz-hzero{position:absolute;left:50%;top:-3px;bottom:-3px;border-left:1px solid #c3c2b7;}
+.viz-hval{font-size:12px;font-weight:700;color:#1e293b;font-variant-numeric:tabular-nums;min-width:62px;text-align:right;}
+.viz-tbl{margin-top:10px;font-size:11px;}
+.viz-tbl summary{cursor:pointer;color:#64748b;font-weight:600;}
+.viz-tip{position:fixed;z-index:999;display:none;background:#1e293b;color:#fff;font-size:11px;line-height:1.5;padding:7px 10px;border-radius:8px;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2);max-width:240px;}
+@media print{.viz-col,.viz-hbar,.viz-legend i{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.viz-tbl{display:none;}.card{break-inside:avoid;}}
 .pl-section-hd{font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:.1em;text-transform:uppercase;padding:12px 0 6px;}
 .pl-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f8fafc;font-size:13px;}
 .pl-row:last-child{border-bottom:none;}
@@ -487,7 +519,7 @@ function dashHTML(){
   if(fl.length===0)return entityBarHTML()+periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+'</div><div class="card" style="text-align:center;padding:40px 20px;color:#94a3b8;"><div style="font-size:36px;margin-bottom:10px;">&#x1F4CA;</div><div style="font-weight:600;">No orders in this period</div></div>';
   var netBg=s.net>=0?"background:#eff6ff;border:1px solid #bfdbfe;":"background:#fef2f2;border:1px solid #fecaca;";
   var netColor=s.net>=0?"#2563eb":"#dc2626";
-  return entityBarHTML()+periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+" &middot; "+s.orders+' orders</div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+fmt$(s.rev)+'</div><div class="kpi-lbl">Revenue</div></div><div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:#16a34a;">'+fmt$(s.gross)+'</div><div class="kpi-lbl">Gross Profit</div><div class="kpi-sub" style="color:#16a34a;">'+fmtPct(s.grossPct)+'</div></div><div class="kpi" style="'+netBg+'"><div class="kpi-val" style="color:'+netColor+';">'+fmt$(s.net)+'</div><div class="kpi-lbl">Net Profit</div><div class="kpi-sub" style="color:'+netColor+';">'+fmtPct(s.netPct)+'</div>'+(s.labor>0?'<div class="kpi-sub" style="color:#0f766e;">cash '+fmt$(s.cashNet)+' &middot; owner labor unpaid</div>':'')+'</div><div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(s.cogs)+'</div><div class="kpi-lbl">COGS</div></div>'+(entity==="mfg"?'':'<div class="kpi" style="background:#faf5ff;border:1px solid #e9d5ff;"><div class="kpi-val" style="color:#7c3aed;">'+fmt$(calcInventoryValue())+'</div><div class="kpi-lbl">Inventory Value</div><div class="kpi-sub" style="color:#7c3aed;">at cost &middot; on hand</div></div>')+''+(function(){var ar=calcAccountsReceivable();return entity!=="mfg"&&ar.count>0?'<div class="kpi" id="arTile" style="background:#fef2f2;border:1px solid #fecaca;cursor:pointer;"><div class="kpi-val" style="color:#dc2626;">'+fmt$(ar.total)+'</div><div class="kpi-lbl">Receivable</div><div class="kpi-sub" style="color:#dc2626;">'+ar.count+' unpaid &rarr; tap to view</div></div>':'';})()+'</div>'+(entity==="mfg"?'':shippingCardHTML(fl))+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">'+(entity==="mfg"?'Sales to Johnny Creek Baits <span style="font-size:10px;color:#94a3b8;font-weight:500;">by where the bags were sold</span>':'Revenue by Channel')+'</div>'+chList.map(function(e){var margin=e[1].rev>0?(e[1].rev-e[1].cogs)/e[1].rev*100:0;return'<div class="bar-row"><div class="bar-label"><span style="font-weight:600;">'+e[0]+'</span><span style="color:#ea580c;font-weight:700;">'+fmt$(e[1].rev)+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">'+fmtPct(margin)+'</span></span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+Math.round((e[1].rev/maxRev)*100)+'%;background:#f97316;"></div></div></div>';}).join("")+'</div>';
+  return entityBarHTML()+periodBarHTML()+noExp+'<div class="section-title">DASHBOARD</div><div class="section-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+" &middot; "+s.orders+' orders</div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+fmt$(s.rev)+'</div><div class="kpi-lbl">Revenue</div></div><div class="kpi" style="background:#f0fdf4;border:1px solid #bbf7d0;"><div class="kpi-val" style="color:#16a34a;">'+fmt$(s.gross)+'</div><div class="kpi-lbl">Gross Profit</div><div class="kpi-sub" style="color:#16a34a;">'+fmtPct(s.grossPct)+'</div></div><div class="kpi" style="'+netBg+'"><div class="kpi-val" style="color:'+netColor+';">'+fmt$(s.net)+'</div><div class="kpi-lbl">Net Profit</div><div class="kpi-sub" style="color:'+netColor+';">'+fmtPct(s.netPct)+'</div>'+(s.labor>0?'<div class="kpi-sub" style="color:#0f766e;">cash '+fmt$(s.cashNet)+' &middot; owner labor unpaid</div>':'')+'</div><div class="kpi" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="kpi-val" style="color:#475569;">'+fmt$(s.cogs)+'</div><div class="kpi-lbl">COGS</div></div>'+(entity==="mfg"?'':'<div class="kpi" style="background:#faf5ff;border:1px solid #e9d5ff;"><div class="kpi-val" style="color:#7c3aed;">'+fmt$(calcInventoryValue())+'</div><div class="kpi-lbl">Inventory Value</div><div class="kpi-sub" style="color:#7c3aed;">at cost &middot; on hand</div></div>')+''+(function(){var ar=calcAccountsReceivable();return entity!=="mfg"&&ar.count>0?'<div class="kpi" id="arTile" style="background:#fef2f2;border:1px solid #fecaca;cursor:pointer;"><div class="kpi-val" style="color:#dc2626;">'+fmt$(ar.total)+'</div><div class="kpi-lbl">Receivable</div><div class="kpi-sub" style="color:#dc2626;">'+ar.count+' unpaid &rarr; tap to view</div></div>':'';})()+'</div>'+(entity==="mfg"?'':shippingCardHTML(fl))+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">'+(entity==="mfg"?'Sales to Johnny Creek Baits <span style="font-size:10px;color:#94a3b8;font-weight:500;">by where the bags were sold</span>':'Revenue by Channel')+'</div>'+chList.map(function(e){var margin=e[1].rev>0?(e[1].rev-e[1].cogs)/e[1].rev*100:0;return'<div class="bar-row"><div class="bar-label"><span style="font-weight:600;">'+e[0]+'</span><span style="color:#ea580c;font-weight:700;">'+fmt$(e[1].rev)+'<span style="font-size:10px;color:#94a3b8;margin-left:6px;">'+fmtPct(margin)+'</span></span></div><div class="bar-wrap"><div class="bar-fill" style="width:'+Math.round((e[1].rev/maxRev)*100)+'%;background:#f97316;"></div></div></div>';}).join("")+'</div>'+trendCardHTML()+(entity==="combined"?splitCardHTML():'')+productProfitCardHTML(fl);
 }
 
 // Shipping collected from customers vs. what labels cost us (logs.ship_paid / logs.ship_cost).
@@ -740,6 +772,107 @@ function costsHTML(){
     +'<div class="section-title">EDIT COSTS</div><div class="section-sub">Full cost to produce one unit, both companies (baits + bag + bagging labor, no excise) &middot; from the &ldquo;JCB Bait COGS&rdquo; sheet &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div>'+oldCard+addCard;
 }
 
+// ── Charts (plain HTML bars so text stays readable at any width) ──
+// Colors: dataviz reference palette slots 1-2 (blue, orange), validated on the white card surface. Text never wears the
+// series color; every bar has a hover/tap tooltip (data-tip) and each chart has a table toggle.
+var VIZ={s1:"#2a78d6",s2:"#eb6834"};
+function compact$(n){var a=Math.abs(n),s=n<0?"-":"";return s+(a>=1000?"$"+(a/1000).toFixed(a>=10000?0:1).replace(/\.0$/,"")+"K":"$"+Math.round(a));}
+function niceMax(v){if(v<=0)return 0;var p=Math.pow(10,Math.floor(Math.log10(v))),m=v/p;return(m<=1?1:m<=2?2:m<=5?5:10)*p;}
+function vizLegend(series){return series.length<2?'':'<div class="viz-legend">'+series.map(function(s){return'<span><i style="background:'+s.color+';"></i>'+s.name+'</span>';}).join("")+'</div>';}
+function vizTable(head,rows){return'<details class="viz-tbl"><summary>Show as table</summary><table class="cost-tbl"><thead><tr>'+head.map(function(h){return'<th>'+h+'</th>';}).join("")+'</tr></thead><tbody>'+rows.map(function(r){return'<tr>'+r.map(function(c){return'<td>'+c+'</td>';}).join("")+'</tr>';}).join("")+'</tbody></table></details>';}
+// Grouped columns: cats = x labels, series = [{name,color,values}], tips[i] = tooltip HTML per category. Handles negatives.
+function columnChartHTML(cats,series,tips){
+  var all=[];series.forEach(function(s){all=all.concat(s.values);});
+  var hi=niceMax(Math.max(0,Math.max.apply(null,all))),lo=-niceMax(-Math.min(0,Math.min.apply(null,all)));
+  if(hi===lo)hi=1;
+  var H=160,span=hi-lo,y=function(v){return(v-lo)/span*H;};
+  // Gridlines at 0, the top and the middle; the negative floor only gets a label when it has room (else it collides with $0)
+  var ticks=lo===0?[0,hi/2,hi]:(-lo/span<0.15?[0,hi/2,hi]:[lo,0,hi]);
+  var grid=ticks.map(function(t){return'<div class="viz-grid'+(t===0?' zero':'')+'" style="bottom:'+y(t)+'px;"><span>'+compact$(t)+'</span></div>';}).join("");
+  var cols=cats.map(function(c,i){
+    var bars=series.map(function(s){var v=s.values[i],h=Math.max(Math.abs(y(v)-y(0)),v?1:0),b=v>=0?y(0):y(v);
+      return'<div class="viz-colwrap"><div class="viz-col'+(v<0?' neg':'')+'" style="background:'+s.color+';height:'+h+'px;bottom:'+b+'px;"></div></div>';}).join("");
+    return'<div class="viz-slot" data-tip="'+escHtml(tips[i])+'"><div class="viz-bars" style="height:'+H+'px;">'+bars+'</div><div class="viz-x">'+c+'</div></div>';
+  }).join("");
+  return vizLegend(series)+'<div class="viz-plot"><div class="viz-area" style="height:'+H+'px;">'+grid+'</div><div class="viz-cols">'+cols+'</div></div>';
+}
+// Horizontal bars, one series: rows = [{label,value,sub,tip}]. Value at the bar tip in text ink.
+function barChartHTML(rows,color){
+  var mx=Math.max.apply(null,rows.map(function(r){return Math.abs(r.value);}).concat([1])),neg=rows.some(function(r){return r.value<0;});
+  return'<div class="viz-hbars">'+rows.map(function(r){
+    var w=Math.abs(r.value)/mx*(neg?50:100);
+    var bar='<div class="viz-hbar'+(r.value<0?' neg':'')+'" style="width:'+w+'%;background:'+color+';'+(neg?(r.value<0?'right:50%;':'left:50%;'):'left:0;')+'"></div>';
+    return'<div class="viz-hrow" data-tip="'+escHtml(r.tip)+'"><div class="viz-hlabel">'+r.label+(r.sub?'<span>'+r.sub+'</span>':'')+'</div><div class="viz-htrack">'+(neg?'<div class="viz-hzero"></div>':'')+bar+'</div><div class="viz-hval">'+fmt$(r.value)+'</div></div>';
+  }).join("")+'</div>';
+}
+// Last 12 months for a company: revenue + gross profit per month (trimmed to the first month with sales)
+function monthKey(d){return String(d).slice(0,7);}
+function monthlySummary(ent,n){
+  var now=new Date(),keys=[];
+  for(var i=(n||12)-1;i>=0;i--){var d=new Date(now.getFullYear(),now.getMonth()-i,1);keys.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));}
+  var m={};keys.forEach(function(k){m[k]={rev:0,cogs:0,orders:0};});
+  logs.forEach(function(l){if(l.st==="Returned"||!l.date)return;var k=monthKey(l.date);if(!m[k])return;var o=calcOrder(l,products,ent);m[k].rev+=o.rev;m[k].cogs+=o.cogs;m[k].orders++;});
+  var first=keys.findIndex(function(k){return m[k].orders>0;});if(first<0)first=keys.length-1;
+  return keys.slice(first).map(function(k){return{key:k,label:MONTHS[parseInt(k.slice(5,7))-1],rev:m[k].rev,gross:m[k].rev-m[k].cogs,orders:m[k].orders};});
+}
+function trendCardHTML(){
+  var ms=monthlySummary(entity,12);
+  var revName=entity==="mfg"?"Sales to LLC":"Revenue";
+  var tips=ms.map(function(x){return'<b>'+monthLabel(x.key)+'</b><br>'+revName+' '+fmt$(x.rev)+'<br>Gross profit '+fmt$(x.gross)+(x.rev>0?' ('+fmtPct(x.gross/x.rev*100)+')':'')+'<br>'+x.orders+' orders';});
+  return'<div class="card"><div class="viz-title">'+revName+' &amp; gross profit by month</div><div class="viz-sub">'+ENTITIES[entity]+' &middot; last 12 months</div>'
+    +columnChartHTML(ms.map(function(x){return x.label;}),[{name:revName,color:VIZ.s1,values:ms.map(function(x){return x.rev;})},{name:"Gross profit",color:VIZ.s2,values:ms.map(function(x){return x.gross;})}],tips)
+    +vizTable(["Month",revName,"Gross profit","Margin"],ms.map(function(x){return[monthLabel(x.key),fmt$(x.rev),fmt$(x.gross),x.rev>0?fmtPct(x.gross/x.rev*100):"&mdash;"];}))+'</div>';
+}
+// Gross profit by company per month (Combined view only): where the combined profit is earned
+function splitCardHTML(){
+  var a=monthlySummary("llc",12),b=monthlySummary("mfg",12),n=Math.min(a.length,b.length);a=a.slice(a.length-n);b=b.slice(b.length-n);
+  var tips=a.map(function(x,i){return'<b>'+monthLabel(x.key)+'</b><br>Johnny Creek Baits '+fmt$(x.gross)+'<br>JCB Manufacturing '+fmt$(b[i].gross)+'<br>Together '+fmt$(x.gross+b[i].gross);});
+  return'<div class="card"><div class="viz-title">Gross profit by company</div><div class="viz-sub">Where the combined profit is earned &middot; last 12 months</div>'
+    +columnChartHTML(a.map(function(x){return x.label;}),[{name:"Johnny Creek Baits",color:VIZ.s1,values:a.map(function(x){return x.gross;})},{name:"JCB Manufacturing",color:VIZ.s2,values:b.map(function(x){return x.gross;})}],tips)
+    +vizTable(["Month","Johnny Creek Baits","JCB Mfg","Together"],a.map(function(x,i){return[monthLabel(x.key),fmt$(x.gross),fmt$(b[i].gross),fmt$(x.gross+b[i].gross)];}))+'</div>';
+}
+// Gross profit by product type for the period (selected company), top 10
+function productProfitCardHTML(fl){
+  var m={};
+  fl.forEach(function(l){calcOrderLines(l,products).forEach(function(x){
+    var p=x.pid!=null?products.find(function(y){return y.id===x.pid;}):null,cp=matchCostProfile(p),k=cp?cp.name:(x.name||"Other");
+    if(!m[k])m[k]={units:0,rev:0,cogs:0};m[k].units+=x.qty;m[k].rev+=x.rev;m[k].cogs+=x.cogs;});});
+  var rows=Object.keys(m).map(function(k){var d=m[k],g=d.rev-d.cogs;return{label:k,value:g,sub:d.units+' units'+(d.rev>0?' &middot; '+fmtPct(g/d.rev*100):''),
+    tip:'<b>'+escHtml(k)+'</b><br>'+d.units+' units<br>'+(entity==="mfg"?'Sales to LLC ':'Revenue ')+fmt$(d.rev)+'<br>Cost '+fmt$(d.cogs)+'<br>Gross profit '+fmt$(g)+(d.rev>0?' ('+fmtPct(g/d.rev*100)+')':''),rev:d.rev,cogs:d.cogs,units:d.units};})
+    .sort(function(a,b){return b.value-a.value;});
+  if(!rows.length)return'';
+  var top=rows.slice(0,10);
+  return'<div class="card"><div class="viz-title">Gross profit by product</div><div class="viz-sub">'+ENTITIES[entity]+' &middot; '+periodLabel()+(rows.length>10?' &middot; top 10 of '+rows.length:'')+'</div>'
+    +barChartHTML(top,VIZ.s1)
+    +vizTable(["Product","Units",entity==="mfg"?"Sales to LLC":"Revenue","Cost","Gross profit"],rows.map(function(r){return[escHtml(r.label),r.units,fmt$(r.rev),fmt$(r.cogs),fmt$(r.value)];}))+'</div>';
+}
+// Company split table for the Combined report: each company's P&L side by side for the period
+function companySplitHTML(){
+  var fl=getPeriodLogs(),keep=entity,cols={};
+  ["llc","mfg","combined"].forEach(function(e){entity=e;cols[e]=calcSummary(fl,getPeriodExpenses());});entity=keep;
+  var shared=cols.combined.expenses-cols.llc.expenses-cols.mfg.expenses;
+  var r=function(l,f,bold){return'<tr'+(bold?' style="font-weight:700;"':'')+'><td>'+l+'</td><td>'+f(cols.llc)+'</td><td>'+f(cols.mfg)+'</td><td>'+f(cols.combined)+'</td></tr>';};
+  return'<div class="pl-section-hd">By Company</div><div style="overflow-x:auto;"><table class="cost-tbl"><thead><tr><th></th><th>Johnny Creek Baits</th><th>JCB Mfg</th><th>Combined</th></tr></thead><tbody>'
+    +r("Revenue",function(s){return fmt$(s.rev);})
+    +r("Cost of goods",function(s){return"-"+fmt$(s.cogs);})
+    +r("Gross profit",function(s){return fmt$(s.gross);},true)
+    +r("Gross margin",function(s){return fmtPct(s.grossPct);})
+    +'</tbody></table></div><div style="font-size:10px;color:#94a3b8;margin:6px 0 4px;line-height:1.5;">JCB Manufacturing&rsquo;s revenue is its sale of baits to Johnny Creek Baits, so it cancels out in Combined: the two gross profits add up to the combined gross profit.'+(shared>0?' Operating expenses ('+fmt$(cols.combined.expenses)+') come from combined accountant P&amp;Ls and are shown on the combined lines only.':'')+'</div>';
+}
+function wireViz(){
+  var tip=document.getElementById("vizTip");
+  if(!tip){tip=document.createElement("div");tip.id="vizTip";tip.className="viz-tip";document.body.appendChild(tip);}
+  function show(el,x,y){tip.innerHTML=el.getAttribute("data-tip");tip.style.display="block";var w=tip.offsetWidth,h=tip.offsetHeight;
+    tip.style.left=Math.max(8,Math.min(window.innerWidth-w-8,x-w/2))+"px";tip.style.top=Math.max(8,y-h-14)+"px";}
+  document.querySelectorAll("[data-tip]").forEach(function(el){
+    el.onmousemove=function(e){show(el,e.clientX,e.clientY);};
+    el.onmouseleave=function(){tip.style.display="none";};
+    el.onclick=function(e){var r=el.getBoundingClientRect();show(el,r.left+r.width/2,r.top);e.stopPropagation();};
+  });
+  document.onclick=function(){tip.style.display="none";};
+  window.onscroll=function(){tip.style.display="none";};
+}
+
 function getYTDLogs(){
   var now=new Date(),jan1=now.getFullYear()+"-01-01",today=localDateStr(now);
   return logs.filter(function(l){return l.date>=jan1&&l.date<=today&&l.st!=="Returned";});
@@ -866,13 +999,14 @@ function reportHTML(){
         +'<div style="font-size:11px;color:'+netColor+';margin-top:4px;">'+fmtPct(s.netPct)+' net margin &middot; '+s.orders+' orders</div>'
       +'</div>'
       +cashProfitHTML(s)
+      +(entity==="combined"?'<div style="margin-top:16px;">'+companySplitHTML()+'</div>':'<div style="font-size:10px;color:#94a3b8;margin-top:10px;line-height:1.5;">'+(entity==="mfg"?'JCB Manufacturing sells the baits it makes to Johnny Creek Baits, LLC. Figured on what the LLC sold in the period, at the first-sale price; excise is Manufacturing&rsquo;s tax.':'Johnny Creek Baits, LLC buys its baits from JCB Manufacturing at the first-sale price, then bags and sells them.')+'</div>')
       +'<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">'
         +'<div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">UNITS SOLD BY PRODUCT</div>'
         +(productRows||'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">No units in this period</div>')
       +'</div>'
-      +(function(){var ar=calcAccountsReceivable();return'<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">BALANCE SHEET NOTE</div><div class="pl-row"><span style="color:#475569;">Inventory Value (at cost &middot; on hand)</span><span style="font-weight:700;color:#7c3aed;">'+fmt$(calcInventoryValue())+'</span></div>'+(ar.count>0?'<div class="pl-row"><span style="color:#475569;">Accounts Receivable (Dealer / Distro unpaid)</span><span style="font-weight:700;color:#dc2626;">'+fmt$(ar.total)+'<span style="font-size:10px;font-weight:400;color:#94a3b8;margin-left:4px;">'+ar.count+' orders</span></span></div>':'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Accounts Receivable</span><span style="color:#16a34a;font-weight:600;">$0.00 &mdash; all paid</span></div>')+'</div>'})()
+      +(function(){var ar=calcAccountsReceivable();return entity==="mfg"?'':'<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">BALANCE SHEET NOTE</div><div class="pl-row"><span style="color:#475569;">Inventory Value (at cost &middot; on hand)</span><span style="font-weight:700;color:#7c3aed;">'+fmt$(calcInventoryValue())+'</span></div>'+(ar.count>0?'<div class="pl-row"><span style="color:#475569;">Accounts Receivable (Dealer / Distro unpaid)</span><span style="font-weight:700;color:#dc2626;">'+fmt$(ar.total)+'<span style="font-size:10px;font-weight:400;color:#94a3b8;margin-left:4px;">'+ar.count+' orders</span></span></div>':'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Accounts Receivable</span><span style="color:#16a34a;font-weight:600;">$0.00 &mdash; all paid</span></div>')+'</div>'})()
 
-    +'</div>';
+    +'</div>'+trendCardHTML()+(entity==="combined"?splitCardHTML():'')+productProfitCardHTML(fl);
 }
 
 // ── Transfers: JCB Manufacturing (vendor) → Johnny Creek Baits, LLC (buyer) ──
@@ -1258,6 +1392,7 @@ function wireTransfers(){
 
 function wire(){
   if(activeTab==="tr")wireTransfers();
+  wireViz();
   document.querySelectorAll(".tab").forEach(function(b){b.onclick=function(){activeTab=b.dataset.tab;render();};});
   document.querySelectorAll("[data-period]").forEach(function(b){b.onclick=function(){period=b.dataset.period;render();};});
   document.querySelectorAll("[data-entity]").forEach(function(b){b.onclick=function(){entity=b.dataset.entity;try{localStorage.setItem("jcb_entity",entity);}catch(e){}render();};});

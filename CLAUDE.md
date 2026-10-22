@@ -392,3 +392,9 @@ with the code. Update the sections above if architecture changed.
   barely covers cost on Hawg/Craw and loses money on Terp Minnow (flagged to Thomas). Next: charts, per-company shareholder report polish.
   Later: Thomas ran the entity SQL (all 16 rows 'llc'); past accountant P&Ls were combined, so added 'both' (follow-up SQL
   `2026-10-22_expense_entity_both.sql` retags all existing rows 'both').
+- **2026-10-22 (charts + per-company reports)** — Dashboard + Shareholder Report charts, following the selected company:
+  revenue & gross profit by month (last 12 months, grouped columns), gross profit by company (Combined only), gross profit by
+  product (period, top 10 bars). Plain HTML bars (`columnChartHTML`, `barChartHTML`), hover/tap tooltip (`wireViz`, `data-tip`),
+  "Show as table" on each; colors = dataviz reference slots blue #2a78d6 / orange #eb6834 (validator passed on white). Report per
+  company: title + method note per company, AR hidden for Mfg, Combined adds a By Company table (`companySplitHTML`). Print keeps
+  bar colors. Verified: totals unchanged, LLC + Mfg = Combined, no errors at 390 / 1100 px.
