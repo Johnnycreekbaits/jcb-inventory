@@ -398,3 +398,7 @@ with the code. Update the sections above if architecture changed.
   "Show as table" on each; colors = dataviz reference slots blue #2a78d6 / orange #eb6834 (validator passed on white). Report per
   company: title + method note per company, AR hidden for Mfg, Combined adds a By Company table (`companySplitHTML`). Print keeps
   bar colors. Verified: totals unchanged, LLC + Mfg = Combined, no errors at 390 / 1100 px.
+- **2026-10-22 (Terp Minnow $0.12/bait)** — Thomas set Terp Minnow's price to the LLC at $0.12/bait from 2026-10-22 (slow mold:
+  24/shot, 110 s; at $0.10 Mfg lost ~$0.04/bag). `PER_BAIT_RATES` per cost-profile id with from-dates, `perBaitRate(cp,date)` used by
+  `firstSalePrice` + loose PO lines. Terp bag: Mfg −$0.04 → +$0.10, LLC Dealer $2.32 → $2.16, combined −$0.016 (excise $0.08 → $0.096).
+  No Terp orders on/after Oct 21, so nothing restated; all totals verified unchanged.

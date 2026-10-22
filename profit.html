@@ -242,6 +242,10 @@ function hasFirstSale(cp){return !!cp&&cp.first_sale!=null&&cp.first_sale!==""&&
 // first sale = rate × baits in the unit. Before that date cost_profiles.first_sale ($1.10/bag) still applies, so past
 // months don't restate. Pass the order/PO date; no date = today.
 var PER_BAIT_RATE=0.10,PER_BAIT_FROM="2026-10-21";
+// Slow molds get a higher per-bait price so JCB Manufacturing covers its Zorn time (Thomas 2026-10-22). Each entry applies
+// from its date; earlier orders keep the base rate. Terp Minnow: 24 baits/shot, 110 s cycle, cost $0.096/bait.
+var PER_BAIT_RATES={"terp-minnow":[{from:"2026-10-22",rate:0.12}]};
+function perBaitRate(cp,date){var d=date||localDateStr(new Date()),r=PER_BAIT_RATE;(PER_BAIT_RATES[cp&&cp.id]||[]).forEach(function(x){if(d>=x.from)r=x.rate;});return r;}
 var TRANSFER_MARKUP=0.20; // from PER_BAIT_FROM, non-soft-plastic first sale = cost + 20% (stored first_sale = before that date)
 var PER_BAIT_SERIES=["Baby Hawgs","Craws","Finesse Worms","Nekos","Stick Baits","Soft Jerk","Terp Minnow","Paddle Tail"];
 var BUNDLE_BAITS={"variety-pack":56,"creek-box":74,"season-box":114}; // fixed mixes; Paddle Tail bags hold 6, the rest 8
@@ -253,7 +257,7 @@ function perBaitCount(cp,prod,baits){
 function firstSalePrice(cp,prod,baits,date){
   if(!cp||NO_EXCISE_SERIES.indexOf(cp.series)>=0)return 0;
   if((date||localDateStr(new Date()))>=PER_BAIT_FROM){
-    var n=perBaitCount(cp,prod,baits);if(n)return PER_BAIT_RATE*n;
+    var n=perBaitCount(cp,prod,baits);if(n)return perBaitRate(cp,date)*n;
     // Everything else JCB Manufacturing sells the LLC (XG8, Walker, Kanji Ball): cost + TRANSFER_MARKUP
     if(hasFirstSale(cp))return Math.round(Number(cp.cogs)*(1+TRANSFER_MARKUP)*100)/100;
   }
@@ -766,7 +770,7 @@ function costsHTML(){
     var i=costProfiles.indexOf(cp);
     return'<div class="exp-item" style="align-items:center;"><div style="flex:1;min-width:0;font-size:12px;font-weight:600;">'+cp.name+'</div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:11px;color:#94a3b8;">$<input type="number" step="0.01" min="0" value="'+(hasFirstSale(cp)?Number(cp.first_sale).toFixed(2):"")+'" placeholder="not set" data-fsidx="'+i+'" class="fs-inp" style="width:70px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:4px 6px;font-size:12px;font-weight:700;text-align:right;"/><span style="width:72px;text-align:right;color:#7c3aed;font-weight:700;">'+(hasFirstSale(cp)?'excise '+fmt$(EXCISE_RATE*Number(cp.first_sale)):'')+'</span></div></div>';
   }).join("");
-  var oldCard='<details class="card" style="margin-bottom:10px;"><summary style="font-weight:700;font-size:13px;cursor:pointer;">&#x1F570;&#xFE0F; Before '+COGS_FROM+' (old orders only)</summary><div style="font-size:11px;color:#64748b;margin:8px 0;line-height:1.6;">Orders before '+COGS_FROM+' keep the old flat BOM ($0.67/bag soft plastics) and JCB Manufacturing&rsquo;s old price for finished bags below (excise = 10% of it). From '+PER_BAIT_FROM+' the price is automatic: $'+PER_BAIT_RATE.toFixed(2)+' per soft-plastic bait, cost + '+Math.round(TRANSFER_MARKUP*100)+'% for everything else.</div>'+fsRows+'</details>';
+  var oldCard='<details class="card" style="margin-bottom:10px;"><summary style="font-weight:700;font-size:13px;cursor:pointer;">&#x1F570;&#xFE0F; Before '+COGS_FROM+' (old orders only)</summary><div style="font-size:11px;color:#64748b;margin:8px 0;line-height:1.6;">Orders before '+COGS_FROM+' keep the old flat BOM ($0.67/bag soft plastics) and JCB Manufacturing&rsquo;s old price for finished bags below (excise = 10% of it). From '+PER_BAIT_FROM+' the price is automatic: $'+PER_BAIT_RATE.toFixed(2)+' per soft-plastic bait (Terp Minnow $0.12 from 2026-10-22), cost + '+Math.round(TRANSFER_MARKUP*100)+'% for everything else.</div>'+fsRows+'</details>';
   var addCard='<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:12px;">&#x2795; Add Product</div><div class="field-wrap"><label class="field-label">Product Name</label><input class="field-input" id="cpNewName" placeholder="e.g. Paddle Tail"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Unit Type</label><select class="field-input" id="cpNewUnit"><option value="bag">bag (soft plastic)</option><option value="bait">bait (hard bait)</option></select></div><div class="field-wrap"><label class="field-label">Cost Per Unit ($)</label><input class="field-input" type="number" step="0.01" min="0" id="cpNewCogs" placeholder="1.04"/></div></div><button class="btn-primary" id="btnAddCp" style="width:100%;padding:11px;font-size:13px;">&#x2795; Add Product</button></div>';
   return entityBarHTML()+profitTableHTML()+costBuildHTML()
     +'<div class="section-title">EDIT COSTS</div><div class="section-sub">Full cost to produce one unit, both companies (baits + bag + bagging labor, no excise) &middot; from the &ldquo;JCB Bait COGS&rdquo; sheet &middot; edits save immediately</div><div class="card" style="margin-bottom:10px;">'+rows+'</div>'+oldCard+addCard;
@@ -1086,7 +1090,7 @@ function trHTML(){
   var kpis='<div class="kpi-grid"><div class="kpi" style="background:#faf5ff;border:2px solid #c4b5fd;"><div class="kpi-val" style="color:#7c3aed;">'+tMade+'</div><div class="kpi-lbl">Bags Produced</div></div><div class="kpi" style="background:#f0fdf4;border:2px solid #86efac;"><div class="kpi-val" style="color:#16a34a;">'+tRecv+'</div><div class="kpi-lbl">Bags Received</div></div></div>';
   // Loose baits delivered this month: delivered vs bagged vs returned as reusable waste
   var lt={d:0,b:0,w:0,l:0};
-  var looseHTML=lb.length===0?'':'<div class="card" style="border:1px solid #c4b5fd;"><div style="font-weight:700;font-size:13px;margin-bottom:2px;">&#x1FAB1; Loose Baits &middot; '+monthLabel(trMonth)+'</div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Delivered by JCB at $'+PER_BAIT_RATE.toFixed(2)+'/bait &middot; bagged = bags received &times; baits per bag (this is what the PO bills) &middot; waste = returned to JCB, never sold, not billed</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.05em;"><th style="text-align:left;padding:6px 4px;">Batch</th><th style="text-align:right;padding:6px 4px;">Delivered</th><th style="text-align:right;padding:6px 4px;">Bagged</th><th style="text-align:right;padding:6px 4px;">Waste</th><th style="text-align:right;padding:6px 4px;">Loose</th></tr></thead><tbody>'
+  var looseHTML=lb.length===0?'':'<div class="card" style="border:1px solid #c4b5fd;"><div style="font-weight:700;font-size:13px;margin-bottom:2px;">&#x1FAB1; Loose Baits &middot; '+monthLabel(trMonth)+'</div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Delivered by JCB at $'+PER_BAIT_RATE.toFixed(2)+'/bait (Terp Minnow $0.12 from Oct 22) &middot; bagged = bags received &times; baits per bag (this is what the PO bills) &middot; waste = returned to JCB, never sold, not billed</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.05em;"><th style="text-align:left;padding:6px 4px;">Batch</th><th style="text-align:right;padding:6px 4px;">Delivered</th><th style="text-align:right;padding:6px 4px;">Bagged</th><th style="text-align:right;padding:6px 4px;">Waste</th><th style="text-align:right;padding:6px 4px;">Loose</th></tr></thead><tbody>'
     +lb.map(function(b){var bg=baggedBaits(b),w=b.waste_baits||0,l=looseLeft(b);lt.d+=b.qty;lt.b+=bg;lt.w+=w;lt.l+=l;return'<tr style="border-top:1px solid #f1f5f9;"><td style="padding:7px 4px;">'+prodLabel(b.product_name,b.color)+'<div style="font-size:10px;color:#94a3b8;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+'</div></td><td style="text-align:right;padding:7px 4px;">'+b.qty+'</td><td style="text-align:right;padding:7px 4px;">'+bg+'</td><td style="text-align:right;padding:7px 4px;color:#7c3aed;">'+(w||"")+'</td><td style="text-align:right;padding:7px 4px;font-weight:700;color:'+(l===0?"#16a34a":l>0?"#d97706":"#dc2626")+';">'+l+'</td></tr>';}).join("")
     +'</tbody><tfoot><tr style="border-top:2px solid #e2e8f0;font-weight:700;"><td style="padding:8px 4px;">Total</td><td style="text-align:right;padding:8px 4px;">'+lt.d+'</td><td style="text-align:right;padding:8px 4px;">'+lt.b+'</td><td style="text-align:right;padding:8px 4px;color:#7c3aed;">'+lt.w+'</td><td style="text-align:right;padding:8px 4px;">'+lt.l+'</td></tr></tfoot></table><div style="font-size:10px;color:#94a3b8;margin-top:6px;">Loose &gt; 0 = still to bag, or return as waste from the inventory app&rsquo;s batch list &middot; Loose &lt; 0 = more bagged than delivered</div></div>';
   // Open batches (any month)
@@ -1205,7 +1209,8 @@ function linesFromReceived(rec,markup){
 function baitCostFor(pid){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);if(!cp||!p)return null;var pk=p.pack>0?p.pack:8;return Math.round(Math.max(0,Number(cp.cogs)-BAG_COST)/pk*10000)/10000;}
 function looseLine(pid,qty,credit){
   var p=products.find(function(x){return x.id===pid;})||{};
-  return{pid:pid,name:(p.name||"")+(credit?" — reusable waste returned to JCB (credit)":" (loose baits)"),color:p.color||"",series:p.series||"",qty:qty,cost:baitCostFor(pid),price:credit?-PER_BAIT_RATE:PER_BAIT_RATE,loose:true,credit:!!credit};
+  var rate=perBaitRate(matchCostProfile(p));
+  return{pid:pid,name:(p.name||"")+(credit?" — reusable waste returned to JCB (credit)":" (loose baits)"),color:p.color||"",series:p.series||"",qty:qty,cost:baitCostFor(pid),price:credit?-rate:rate,loose:true,credit:!!credit};
 }
 function linesFromLoose(hist){
   var byId={},baits={};
@@ -1293,7 +1298,7 @@ function wirePOEditor(){
   document.getElementById("poReprice").onclick=function(){
     var n=0,skipped=0;
     d.lines.forEach(function(l){
-      if(l.loose){l.cost=baitCostFor(l.pid);l.price=l.credit?-PER_BAIT_RATE:PER_BAIT_RATE;n++;return;}
+      if(l.loose){var rate=perBaitRate(matchCostProfile(products.find(function(x){return x.id===l.pid;})));l.cost=baitCostFor(l.pid);l.price=l.credit?-rate:rate;n++;return;}
       var c=l.pid!=null?unitCostFor(l.pid,l.baits):null;if(c==null){skipped++;return;}l.cost=c;l.price=poPriceFor(l.pid,c,d.markup_pct,l.baits,l.era||d.po_date);n++;});
     renderPOEditor();showToast("Re-priced "+n+" lines at "+d.markup_pct+"%"+(skipped?" ("+skipped+" without cost left as-is)":""));
   };
