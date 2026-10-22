@@ -164,8 +164,9 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - Both companies are figured on what was SOLD in the period (same basis as excise), NOT on POs (none exist yet; most past
   production was + taps), so LLC + Mfg = Combined exactly (verified every period). POs stay the billing record.
 - Mfg view drops shipping + Shopify fees (LLC's) and hides AR / inventory / shipping tiles.
-- `expenses.entity` ('llc' | 'mfg', SQL `supabase/sql/2026-10-22_expense_entity.sql`); untagged = LLC. Expenses tab has a company
-  picker, per-row move button, imports tagged with the picked company. Excise payments stay out of operating expenses.
+- `expenses.entity` ('llc' | 'mfg' | 'both'; SQL `2026-10-22_expense_entity.sql` then `_both.sql`). 'both' = from a combined
+  accountant P&L (all reports through Oct 2026, Thomas): Combined view only, never split; company views show a "Not included" note.
+  Separate P&Ls going forward. Expenses tab: company picker (LLC / Mfg / Both), per-row company select, imports tagged with the pick. Excise payments stay out of operating expenses.
 
 ## Key Functions / Architecture
 - `parseItems(raw)` — handles both `log.items` formats
@@ -389,3 +390,5 @@ with the code. Update the sections above if architecture changed.
   moved into a "Before Oct 21" fold (fixes the overlapping rows). Verified in headless Chrome: Combined identical to before for 5
   periods; LLC + Mfg gross = Combined gross to the cent; all 8 tabs × 3 companies render with no errors. Finding: at $0.10/bait Mfg
   barely covers cost on Hawg/Craw and loses money on Terp Minnow (flagged to Thomas). Next: charts, per-company shareholder report polish.
+  Later: Thomas ran the entity SQL (all 16 rows 'llc'); past accountant P&Ls were combined, so added 'both' (follow-up SQL
+  `2026-10-22_expense_entity_both.sql` retags all existing rows 'both').
