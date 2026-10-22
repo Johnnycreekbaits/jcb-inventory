@@ -350,3 +350,6 @@ with the code. Update the sections above if architecture changed.
   pricing), not manufacturing; (3) unbagged baits returned to JCB as waste are never sold → no sale, no excise. So POs now
   bill loose baits when bagged instead of on delivery + waste credit. Simulated Oct/Nov: Oct $120.50 (excise $12.05), Nov
   $46.00 ($4.60); 1,200 of 1,600 delivered billed (400 returned never billed).
+- **2026-10-22 (Candice + finance password)** — Added Candice to the "Who is using this device?" pickers (inventory login
+  screen + batch made-by list; finance Transfers user picker). Finance password reset by Thomas (new `PW_HASH`; password
+  itself is NOT in this repo). Devices already logged in stay logged in (localStorage flag).

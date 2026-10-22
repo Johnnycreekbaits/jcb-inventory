@@ -79,7 +79,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif;}
 var SB_URL="https://rgjnasxasmwzvywgkgdu.supabase.co";
 var SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnam5hc3hhc213enZ5d2drZ2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODQ3NjYsImV4cCI6MjA5NDg2MDc2Nn0.kBEkFRW1pe5BAU_P4fhZFcbzBMxfUR2q5-Tvxq16vB8";
 var HDR={"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json"};
-var PW_HASH="b441f97d2785a52e2f6db102f5ee1003fcfd709f7340ed11751399148c14f1a1";
+var PW_HASH="d70def8e8b2d36e99c8ab7517a2e82937c8dde76e47145217077f600aa5634ec";
 
 function dbGet(t,q){return fetch(SB_URL+"/rest/v1/"+t+(q||""),{headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});return r.json();});}
 function dbPost(t,b){return fetch(SB_URL+"/rest/v1/"+t,{method:"POST",headers:Object.assign({},HDR,{"Prefer":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify(b)}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
@@ -792,7 +792,7 @@ function trHTML(){
   if(trReady===null)return head+'<div class="loading"><div class="spin">&#x1F69A;</div></div>';
   if(trReady===false)return head+'<div class="card" style="border:1px solid #fde68a;"><div style="font-weight:700;color:#92400e;margin-bottom:8px;">&#x2699;&#xFE0F; One-time setup required</div><div style="font-size:12px;color:#64748b;line-height:1.7;">The <code>production_batches</code> / <code>transfer_pos</code> tables are missing. Run <code>supabase/sql/2026-10-10_intercompany_transfers.sql</code> in the Supabase SQL editor, then refresh.</div><div style="font-size:10px;color:#94a3b8;margin-top:8px;">'+escHtml(trErr.slice(0,200))+'</div></div>';
   var userBar=currentUser?'<div style="font-size:11px;color:#94a3b8;margin-bottom:10px;">Signed as <strong style="color:#475569;">'+escHtml(currentUser)+'</strong> &middot; <a href="#" id="trChangeUser" style="color:#ea580c;">change</a></div>'
-    :'<div class="card" style="border:1px solid #fed7aa;"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">Who is using this device?</div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+["Thomas","Mike","Greg"].map(function(n){return'<button class="btn-outline" data-truser="'+n+'">'+n+'</button>';}).join("")+'</div><div style="font-size:10px;color:#94a3b8;margin-top:6px;">Used for &ldquo;entered by&rdquo; / &ldquo;updated by&rdquo; on batches and POs.</div></div>';
+    :'<div class="card" style="border:1px solid #fed7aa;"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">Who is using this device?</div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+["Thomas","Mike","Greg","Candice"].map(function(n){return'<button class="btn-outline" data-truser="'+n+'">'+n+'</button>';}).join("")+'</div><div style="font-size:10px;color:#94a3b8;margin-top:6px;">Used for &ldquo;entered by&rdquo; / &ldquo;updated by&rdquo; on batches and POs.</div></div>';
   var r=monthRange(trMonth),key=r.start+"|"+r.end,hist=trHistCache[key];
   var monthBar='<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;"><input type="month" class="field-input" id="trMonthSel" value="'+trMonth+'" style="max-width:180px;"/><button class="btn-gray" id="trReload" style="padding:9px 12px;">&#x1F504;</button></div>';
   if(!hist){
