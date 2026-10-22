@@ -88,18 +88,18 @@ function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",
 
 var DEFAULT_COSTS=[
   // Soft plastics: "JCB Bait COGS (as of Oct 2026)" all-in per bag minus its excise line (excise is added separately)
-  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:1.16,first_sale:1.10},
-  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:1.17,first_sale:1.10},
-  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.95,first_sale:1.10},
-  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:1.03,first_sale:1.10},
-  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:1.23,first_sale:1.10},
-  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:1.07,first_sale:1.10}, // = Fluke tab
-  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.34,first_sale:1.10},
-  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:1.06,first_sale:1.10},
+  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.96,first_sale:1.10},
+  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.97,first_sale:1.10},
+  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.75,first_sale:1.10},
+  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.83,first_sale:1.10},
+  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:1.03,first_sale:1.10},
+  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.87,first_sale:1.10}, // = Fluke tab
+  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.14,first_sale:1.10},
+  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.86,first_sale:1.10},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.50,first_sale:2.46},
-  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:6.93,first_sale:7.70}, // 7 Neko/Finesse bags ≈ $0.99
-  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:10.46,first_sale:11.00},   // 4 Finesse, 3 Hawg, 3 Paddle Tail
-  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:16.23,first_sale:16.50}, // Creek + 2 Soft Jerk, 2 Stick, 1 Craw
+  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:5.53,first_sale:7.70}, // 7 Neko/Finesse bags ≈ $0.79
+  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:8.46,first_sale:11.00},   // 4 Finesse, 3 Hawg, 3 Paddle Tail
+  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:13.23,first_sale:16.50}, // Creek + 2 Soft Jerk, 2 Stick, 1 Craw
   {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
   {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
   {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
@@ -167,7 +167,7 @@ function matchCostProfile(prod){
 }
 // Custom-order bags (items[].baits) hold a different bait count than the product's pack: the bag itself is a fixed
 // cost, the rest of a bag's COGS scales with the number of baits in it.
-var BAG_COST=0.58; // per-bag fixed cost on "JCB Bait COGS (as of Oct 2026)": bag $0.18 + bagging labor $0.40 ($40/hr, 100 bags/hr)
+var BAG_COST=0.38; // per-bag fixed cost on "JCB Bait COGS (as of Oct 2026)": bag $0.18 + bagging labor $0.20 ($20/hr per person, 100 bags/person-hr)
 // From COGS_FROM each soft-plastic style has its own cost (cost_profiles.cogs, from the "JCB Bait COGS" sheet). Orders
 // before that date keep the old flat BOM ($0.67/bag, $0.20 bag) so past months don't restate. No date = today.
 var COGS_FROM="2026-10-21",OLD_BAG_COST=0.20;
