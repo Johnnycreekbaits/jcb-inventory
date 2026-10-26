@@ -937,6 +937,7 @@ function openBatches(){return batches.filter(function(b){return batchLeft(b)>0;}
 function localToday(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function escHtml(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function batchLabel(b){return(b.batch_no?b.batch_no+" · ":"")+b.batch_date+" · "+b.product_name+(b.color?" — "+b.color:"");}
+function fmtMakeTime(m){if(!m)return"";var h=Math.floor(m/60),r=m%60;return(h?h+"h":"")+(h&&r?" ":"")+(r?r+"m":"");}
 function nextBatchNo(){var mx=0;batches.forEach(function(b){var m=String(b.batch_no||"").match(/(\d+)\s*$/);if(m)mx=Math.max(mx,parseInt(m[1]));});return"B-"+String(mx+1).padStart(3,"0");}
 
 function batchModal(id){
@@ -956,6 +957,7 @@ function batchModal(id){
     +'<div class="field-wrap"><label class="field-label">Product</label><select class="field-input" id="bProd">'+prodOpts+'</select></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label" id="bQtyLbl">'+(unit0==="bait"?"Baits Delivered":"Bags Made")+'</label><input class="field-input" type="number" min="1" id="bQty" value="'+(b?b.qty:"")+'" placeholder="'+(unit0==="bait"?"e.g. 1600":"e.g. 200")+'"/></div><div class="field-wrap"><label class="field-label">Date Made</label><input class="field-input" type="date" id="bDate" value="'+(b?b.batch_date:localToday())+'"/></div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field-wrap"><label class="field-label">Batch #</label><input class="field-input" id="bNo" value="'+escHtml(b?b.batch_no:nextBatchNo())+'"/></div><div class="field-wrap"><label class="field-label">Made By</label><input class="field-input" id="bMadeBy" list="bWhoList" value="'+escHtml(madeBy)+'"/><datalist id="bWhoList">'+who.map(function(w){return'<option value="'+escHtml(w)+'">';}).join("")+'</datalist></div></div>'
+    +'<div class="field-wrap"><label class="field-label">Time to Make (optional)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><input class="field-input" type="number" min="0" step="1" id="bHrs" value="'+(b&&b.make_minutes?Math.floor(b.make_minutes/60):"")+'" placeholder="Hours"/><input class="field-input" type="number" min="0" max="59" step="1" id="bMins" value="'+(b&&b.make_minutes?b.make_minutes%60:"")+'" placeholder="Minutes"/></div></div>'
     +'<div class="field-wrap"><label class="field-label">Notes (optional)</label><input class="field-input" id="bNote" value="'+escHtml(b?b.note:"")+'" placeholder="e.g. Heater 2, red flake"/></div>'
     +(b?'<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">Entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+' &middot; '+batchQtyLbl(b,rec)+(isBaitBatch(b)?' bagged':' received')+' so far'+(b.waste_baits?' &middot; '+b.waste_baits+' returned as waste':'')+'</div>':'')
     +'<button class="btn-primary" id="btnBSave" style="width:100%;padding:13px;font-size:14px;">'+(b?"Save Changes":"Log Batch")+'</button></div></div>');
@@ -972,11 +974,15 @@ function batchModal(id){
     if(!p){showToast("Pick a product","err");return;}
     if(qty<=0){showToast(unit==="bait"?"Enter baits delivered":"Enter bags made","err");return;}
     if(!date){showToast("Enter the date made","err");return;}
+    var hrs=parseFloat(document.getElementById("bHrs").value)||0,mins=parseFloat(document.getElementById("bMins").value)||0;
+    if(hrs<0||mins<0){showToast("Time to make can't be negative","err");return;}
+    var makeMin=Math.round(hrs*60+mins);
     if(b&&unit!==(b.unit||"bag")&&(batchRecv[b.id]||b.waste_baits)){showToast("This batch already has receipts in "+(b.unit||"bag")+"s — keep its date on the same side of "+PER_BAIT_FROM,"err");return;}
     var used=b?(unit==="bait"?(batchRecv[b.id]||0)*p.pack+(b.waste_baits||0):(batchRecv[b.id]||0)):0;
     if(b&&qty<used&&!confirm(used+(unit==="bait"?" baits":" bags")+" from this batch are already "+(unit==="bait"?"bagged or returned":"received")+", which is more than "+qty+". Save anyway?"))return;
     var row={batch_date:date,product_id:p.id,product_name:p.name,color:p.color||"",qty:qty,batch_no:document.getElementById("bNo").value.trim(),made_by:document.getElementById("bMadeBy").value.trim(),note:document.getElementById("bNote").value.trim()};
     if(unit==="bait")row.unit="bait"; // column added by 2026-10-21_loose_baits.sql; bag batches use its default
+    if(makeMin>0||(b&&b.make_minutes))row.make_minutes=makeMin>0?makeMin:null; // column added by 2026-10-26_batch_make_time.sql; only sent when used
     var btn=document.getElementById("btnBSave");batchInFlight=true;btn.disabled=true;btn.textContent="Saving...";
     var req=b?dbPatch("production_batches","id=eq."+b.id,Object.assign(row,{edited_by:currentUser,edited_at:new Date().toISOString()}))
              :dbPost("production_batches",Object.assign(row,{id:Date.now()+(Math.random()*1000|0),entered_by:currentUser}));
@@ -993,7 +999,7 @@ function batchListModal(){
     var bait=isBaitBatch(b),rec=batchBagged(b),left=batchLeft(b);
     var st=left>0?'<span class="hist-badge" style="background:#fff7ed;color:#ea580c;">'+batchQtyLbl(b,left)+' '+(bait?'loose':'open')+'</span>':left<0?'<span class="hist-badge" style="background:#fef2f2;color:#dc2626;">over by '+batchQtyLbl(b,-left)+'</span>':'<span class="hist-badge" style="background:#dcfce7;color:#16a34a;">'+(bait?'closed':'received')+'</span>';
     return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">'+escHtml(b.product_name+(b.color?" — "+b.color:""))+' '+st+'</div>'
-      +'<div style="font-size:11px;color:#64748b;margin-top:3px;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; '+(bait?'delivered '+b.qty+' baits &middot; bagged '+rec+' ('+(batchRecv[b.id]||0)+' bags)'+(b.waste_baits?' &middot; <span style="color:#7c3aed;">returned '+b.waste_baits+' as waste</span>':''):'made '+b.qty+' &middot; received '+rec)+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:3px;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; '+(bait?'delivered '+b.qty+' baits &middot; bagged '+rec+' ('+(batchRecv[b.id]||0)+' bags)'+(b.waste_baits?' &middot; <span style="color:#7c3aed;">returned '+b.waste_baits+' as waste</span>':''):'made '+b.qty+' &middot; received '+rec)+(b.make_minutes?' &middot; &#x23F1;&#xFE0F; '+fmtMakeTime(b.make_minutes):'')+'</div>'
       +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Made by '+escHtml(b.made_by||"?")+' &middot; entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+(b.waste_date?' &middot; waste '+b.waste_date+' by '+escHtml(b.waste_by||"?"):'')+(b.note?' &middot; '+escHtml(b.note):'')+'</div>'
       +(bait&&left>0?'<button class="btn-outline" data-bwaste="'+b.id+'" style="margin-top:6px;padding:5px 10px;font-size:11px;">&#x267B;&#xFE0F; Return '+left+' leftover to JCB as reusable waste</button>':'')+'</div>'
       +'<div style="display:flex;gap:5px;flex-shrink:0;"><button class="edit-btn" data-bedit="'+b.id+'">&#x270F;&#xFE0F;</button><button class="del-btn" data-bdel="'+b.id+'">&#x1F5D1;&#xFE0F;</button></div></div></div>';

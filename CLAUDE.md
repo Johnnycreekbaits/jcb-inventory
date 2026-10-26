@@ -36,7 +36,8 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   `items` jsonb `[{pid,name,color,qty,price,components?}]`, reason, note, restocked (false = damaged/written off),
   returned_by. SQL: `supabase/sql/2026-10-10_returns.sql`.
 - `production_batches` — bags made by JCB Manufacturing (batch_date, product_id/name/color, qty, batch_no,
-  made_by, note, entered_by, edited_by/edited_at). Logging a batch does NOT move stock; Receive Production does.
+  made_by, note, entered_by, edited_by/edited_at, `make_minutes` = time to make, null = not entered). Logging a batch does
+  NOT move stock; Receive Production does.
   Received per batch = sum of history (qty_after − qty_before) with that batch_id; open = qty − received.
 - `transfer_pos` — intercompany POs JCB Manufacturing → Johnny Creek Baits, LLC (po_number, po_date, period_start/end,
   status Draft/Issued/Received/Paid, markup_pct, vendor/buyer name+address, terms, notes, `lines` jsonb
@@ -411,3 +412,6 @@ with the code. Update the sections above if architecture changed.
   Bait tabs + Summary show all 4 channels for combined, LLC and Mfg. Team added a $0.03 label on the sheet → app `LABEL_COST` per
   LLC-filled bag from `LABEL_FROM` 2026-10-22 (added in `bagCOGS` + LLC `pack`; cost profiles unchanged). Only Shopify #1034/#1036/#1037
   (today) changed (+$0.03/bag, LLC side).
+- **2026-10-26 (batch time to make)** — Thomas: record how long each batch took. Log Batch / Edit Batch has an optional "Time to
+  Make" (hours + minutes) saved as `production_batches.make_minutes`; batch list shows it (e.g. "⏱️ 2h 30m"). Only sent when
+  entered, so batches still save before the SQL runs. SQL `supabase/sql/2026-10-26_batch_make_time.sql` — to be run by Thomas.
