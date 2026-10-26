@@ -217,7 +217,7 @@ var OLD_COGS={"baby-hawg":0.67,"craw":0.67,"finesse-worm":0.67,"neko":0.67,"stic
 // Owner labor inside each unit's cost: Mike, Greg and Thomas do all the work unpaid for now, so the P&L shows it as its own
 // line and a cash profit with it added back. From COGS_FROM (sheet): Zorn $40/hr ÷ baits per hour × baits + bagging $0.20/bag.
 // Before: old BOM labor $160 / 12,000 baits × 8 = $0.11/bag (no bagging labor). XG8: $35 labor in its BOM. Walker: none on its BOM.
-var BAGGING_LABOR=0.20;
+var BAGGING_LABOR=0.20,ZORN_RATE=40; // Zorn (injection) labor $/hr per person, same rate as the sheet
 var OWNER_LABOR={"finesse-worm":0.36,"neko":0.40,"paddle-tail":0.40,"soft-jerk":0.41,"baby-hawg":0.57,"craw":0.54,"stickbait":0.53,
   "terp-minnow":0.68,"variety-pack":2.66,"creek-box":4.35,"season-box":6.77,"xg8-glide":35};
 var OLD_OWNER_LABOR={"finesse-worm":0.11,"neko":0.11,"paddle-tail":0.11,"soft-jerk":0.11,"baby-hawg":0.11,"craw":0.11,"stickbait":0.11,
@@ -1071,6 +1071,39 @@ function receivedByProduct(hist){
   });
   return m;
 }
+// Actual labor per batch (production_batches.make_minutes × people × ZORN_RATE; time includes setup + cleanup) vs the sheet's
+// standard Zorn labor (run time only, bagging excluded — that's the LLC's). Loose-bait batches also get JCB Mfg's profit on
+// the baits delivered: price to the LLC − excise − materials − actual labor.
+function batchLabor(b){
+  if(!b.make_minutes)return null;
+  var prod=products.find(function(x){return x.id===b.product_id;}),cp=matchCostProfile(prod),pack=batchPackOf(b),bait=isBaitBatch(b);
+  var baits=bait?b.qty:b.qty*pack,ppl=b.people||1,actual=b.make_minutes/60*ppl*ZORN_RATE;
+  var stdBait=cp?Math.max(0,ownerLaborFor(cp,prod,null,b.batch_date)-(isOldCOGS(cp,b.batch_date)?0:BAGGING_LABOR))/pack:0;
+  var r={b:b,baits:baits,ppl:ppl,actual:actual,std:stdBait*baits,profit:null,profitStd:null};
+  var cost=bait&&prod?baitCostFor(prod.id):null;
+  if(cost!==null){
+    var rev=perBaitRate(cp,b.batch_date)*baits,mat=Math.max(0,cost-stdBait)*baits,ex=rev*EXCISE_RATE;
+    r.profit=rev-ex-mat-actual;r.profitStd=rev-ex-mat-r.std;
+  }
+  return r;
+}
+function fmtBait(n){return(n<0?"-$":"$")+Math.abs(n).toFixed(3);}
+function fmtMakeTime(m){if(!m)return"";var h=Math.floor(m/60),r=m%60;return(h?h+"h":"")+(h&&r?" ":"")+(r?r+"m":"");}
+function batchLaborHTML(list){
+  if(!list.length)return"";
+  var rows=list.map(batchLabor).filter(Boolean),missing=list.length-rows.length;
+  var t={a:0,s:0,p:0,ps:0,baits:0,np:0};
+  rows.forEach(function(r){t.a+=r.actual;t.s+=r.std;if(r.profit!==null){t.p+=r.profit;t.ps+=r.profitStd;t.baits+=r.baits;t.np++;}});
+  var diff=function(d){return'<span style="color:'+(d>0.005?"#dc2626":"#16a34a")+';">'+(d>0.005?fmt$(d)+" over":fmt$(-d)+" under")+'</span>';};
+  var kp='<div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:2px solid #fdba74;"><div class="kpi-val" style="color:#ea580c;">'+fmt$(t.a)+'</div><div class="kpi-lbl">Actual Labor &middot; std '+fmt$(t.s)+'</div></div>'
+    +'<div class="kpi" style="background:'+(t.p<0?"#fef2f2;border:2px solid #fca5a5":"#f0fdf4;border:2px solid #86efac")+';"><div class="kpi-val" style="color:'+(t.p<0?"#dc2626":"#16a34a")+';">'+(t.np?fmt$(t.p):"—")+'</div><div class="kpi-lbl">JCB Mfg Profit'+(t.np?' &middot; '+fmtBait(t.p/t.baits)+'/bait':'')+'</div></div></div>';
+  var body=rows.length===0?'<div style="font-size:12px;color:#94a3b8;">No batch times logged yet. Add Time to Make + people on a batch in the inventory app.</div>':kp+rows.map(function(r){var b=r.b;
+    return'<div class="exp-item" style="align-items:flex-start;"><div style="flex:1;min-width:0;"><div style="font-weight:600;">'+prodLabel(b.product_name,b.color)+'</div><div style="font-size:10px;color:#94a3b8;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; &#x23F1;&#xFE0F; '+fmtMakeTime(b.make_minutes)+(r.ppl>1?' &times; '+r.ppl+' people':'')+' &middot; '+r.baits.toLocaleString()+' baits &middot; '+fmtBait(r.actual/r.baits)+'/bait (std '+fmtBait(r.std/r.baits)+')</div>'
+      +(r.profit!==null?'<div style="font-size:10px;margin-top:2px;">Mfg profit <strong style="color:'+(r.profit<0?"#dc2626":"#16a34a")+';">'+fmt$(r.profit)+'</strong> <span style="color:#94a3b8;">(at standard labor '+fmt$(r.profitStd)+')</span></div>':'')+'</div>'
+      +'<div style="text-align:right;margin-left:8px;"><div style="font-weight:700;">'+fmt$(r.actual)+'</div><div style="font-size:10px;">'+diff(r.actual-r.std)+'</div></div></div>';}).join("")
+    +'<div style="font-size:11px;font-weight:700;margin-top:8px;">Total: '+fmt$(t.a)+' actual vs '+fmt$(t.s)+' standard &middot; '+diff(t.a-t.s)+(t.np?' &middot; Mfg profit '+fmt$(t.p)+' (standard '+fmt$(t.ps)+')':'')+'</div>';
+  return'<div class="card" style="border:1px solid #fdba74;"><div style="font-weight:700;font-size:13px;margin-bottom:2px;">&#x23F1;&#xFE0F; Batch Labor &middot; '+monthLabel(trMonth)+'</div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Actual = time (incl. setup + cleanup) &times; people &times; $'+ZORN_RATE+'/hr &middot; standard = the COGS sheet&rsquo;s Zorn run time only, so actual will usually be higher &middot; Mfg profit = price to the LLC on all baits delivered &minus; excise &minus; materials &minus; actual labor (owner labor, not paid)'+(missing?' &middot; <span style="color:#d97706;">'+missing+' batch'+(missing>1?'es':'')+' with no time logged</span>':'')+'</div>'+body+'</div>';
+}
 function batchesInMonth(ym){var r=monthRange(ym);return batches.filter(function(b){return b.batch_date>=r.start&&b.batch_date<=r.end;});}
 
 function trHTML(){
@@ -1115,7 +1148,7 @@ function trHTML(){
   var incHTML='<div class="card" style="border:1px solid #fde68a;"><div style="font-weight:700;font-size:13px;margin-bottom:4px;">&#x26A0;&#xFE0F; Other Stock Increases <span style="color:#94a3b8;font-weight:500;font-size:11px;">'+incTotal+(incTotal===1?' bag':' bags')+' &middot; might be unlogged production</span></div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">+ taps, new products, positive edits/adjustments in '+monthLabel(trMonth)+'. These are NOT on the PO unless re-entered as Receive Production.</div>'+(incList.length===0?'<div style="font-size:12px;color:#94a3b8;">None.</div>':incList.slice(0,80).map(function(x){return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;">'+prodLabel(x.name,x.color)+'</div><div style="font-size:10px;color:#94a3b8;">'+x.day+' &middot; '+escHtml(x.type)+(x.n>1?' &times;'+x.n:'')+' &middot; '+escHtml(x.who)+(x.note&&x.n===1?' &middot; '+escHtml(x.note):'')+'</div></div><span class="exp-cat" style="background:#fffbeb;color:#d97706;">+'+x.qty+'</span></div>';}).join("")+(incList.length>80?'<div style="font-size:10px;color:#94a3b8;margin-top:6px;">+'+(incList.length-80)+' more</div>':''))+'</div>';
   // This month's batches (editable)
   var mbHTML='<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">&#x1F9EA; Batches Made in '+monthLabel(trMonth)+'</div>'+(mbAll.length===0?'<div style="font-size:12px;color:#94a3b8;">No batches logged. Log them in the inventory app &rarr; Stock &rarr; Log Batch Made.</div>':mbAll.map(function(b){var got=batchRecvAll[b.id]||0;return'<div class="exp-item"><div style="flex:1;min-width:0;"><div style="font-weight:600;">'+prodLabel(b.product_name,b.color)+' <span style="color:#7c3aed;">'+(isBaitBatch(b)?b.qty+' loose baits':'&times;'+b.qty)+'</span></div><div style="font-size:10px;color:#94a3b8;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; made by '+escHtml(b.made_by||"?")+' &middot; entered by <strong>'+escHtml(b.entered_by||"?")+'</strong>'+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+new Date(b.edited_at).toLocaleDateString():'')+' &middot; '+(isBaitBatch(b)?'bagged '+baggedBaits(b)+(b.waste_baits?' &middot; waste '+b.waste_baits:''):'received '+got)+'</div></div><button class="btn-gray" style="padding:5px 10px;font-size:11px;" data-tredb="'+b.id+'">Edit</button></div>';}).join(""))+'</div>';
-  return head+userBar+monthBar+kpis+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">&#x1F4E6; Produced vs Received &middot; '+monthLabel(trMonth)+'</div>'+tbl+'</div>'+looseHTML+obHTML+incHTML+mbHTML+posHTML()+exciseHTML();
+  return head+userBar+monthBar+kpis+'<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:8px;">&#x1F4E6; Produced vs Received &middot; '+monthLabel(trMonth)+'</div>'+tbl+'</div>'+looseHTML+batchLaborHTML(mbAll)+obHTML+incHTML+mbHTML+posHTML()+exciseHTML();
 }
 
 // Excise by quarter (Form 720): owed = 10% of first-sale value on POs dated in the quarter; paid = expenses in EXCISE_CAT

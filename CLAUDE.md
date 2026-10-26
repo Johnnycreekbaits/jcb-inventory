@@ -36,7 +36,7 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
   `items` jsonb `[{pid,name,color,qty,price,components?}]`, reason, note, restocked (false = damaged/written off),
   returned_by. SQL: `supabase/sql/2026-10-10_returns.sql`.
 - `production_batches` — bags made by JCB Manufacturing (batch_date, product_id/name/color, qty, batch_no,
-  made_by, note, entered_by, edited_by/edited_at, `make_minutes` = time to make, null = not entered). Logging a batch does
+  made_by, note, entered_by, edited_by/edited_at, `make_minutes` = time to make incl. setup + cleanup, `people` = people working; null = not entered). Logging a batch does
   NOT move stock; Receive Production does.
   Received per batch = sum of history (qty_after − qty_before) with that batch_id; open = qty − received.
 - `transfer_pos` — intercompany POs JCB Manufacturing → Johnny Creek Baits, LLC (po_number, po_date, period_start/end,
@@ -121,6 +121,10 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - Finance **Transfers** tab (month picker): Produced (batches) vs Received (history `production` rows) per product, open
   batches (all months), "Other stock increases" (+ / add / positive adjustment / edit rows — possible unlogged production,
   NOT on the PO), the month's batches (editable), and POs.
+- Transfers **Batch Labor** card (`batchLabor`, `batchLaborHTML`): actual labor = `make_minutes`/60 × people × `ZORN_RATE` ($40)
+  vs standard = (`OWNER_LABOR` − `BAGGING_LABOR`) / pack per bait (sheet Zorn run time only, so actual runs higher). Loose-bait
+  batches also show JCB Mfg profit on all baits delivered = `perBaitRate` − excise − materials (`baitCostFor` − std labor) − actual labor.
+  Display only: P&L / COGS still use standard labor.
 - PO: prefilled from the period's received units; unit price = Costs-tab COGS × (1 + markup); markup defaults to the last
   PO's, else 15%; Bundles + Apparel skipped. Everything editable; "Re-price at markup", "Refresh qty from inventory",
   printable PO (same Save-as-PDF bar as the invoice). Default note "For resale — sales tax exempt (CDTFA-230 on file)".
@@ -415,3 +419,8 @@ with the code. Update the sections above if architecture changed.
 - **2026-10-26 (batch time to make)** — Thomas: record how long each batch took. Log Batch / Edit Batch has an optional "Time to
   Make" (hours + minutes) saved as `production_batches.make_minutes`; batch list shows it (e.g. "⏱️ 2h 30m"). Only sent when
   entered, so batches still save before the SQL runs. SQL `supabase/sql/2026-10-26_batch_make_time.sql` run by Thomas 2026-10-26 (column verified via REST); pushed.
+- **2026-10-26 (batch labor)** — Thomas: use batch times to track JCB Mfg's actual labor + profit. Time includes setup + cleanup
+  (Thomas). Batch form has People (default 1) next to hours/minutes (`production_batches.people`, SQL
+  `supabase/sql/2026-10-26_batch_people.sql`). Finance Transfers tab: Batch Labor card (see Intercompany transfers). Tested in
+  headless Chromium with in-memory times only (no DB writes): B-003 608 Finesse baits → $26.57 Mfg profit at standard labor
+  ($0.020/bait), hand-checked. Next (agreed): once a few weeks of times exist, option for the Mfg P&L to use actual labor.
