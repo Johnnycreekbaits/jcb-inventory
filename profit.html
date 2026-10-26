@@ -128,19 +128,20 @@ function dbPatch(t,f,b){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"PATCH",
 function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",headers:HDR}).then(function(r){if(!r.ok)return r.text().then(function(e){throw new Error(e);});});}
 
 var DEFAULT_COSTS=[
-  // Soft plastics: "JCB Bait COGS (as of Oct 2026)" all-in per bag minus its excise line (excise is added separately)
-  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.96,first_sale:1.10},
-  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.97,first_sale:1.10},
-  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.75,first_sale:1.10},
-  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.83,first_sale:1.10},
-  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:1.03,first_sale:1.10},
-  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.87,first_sale:1.10}, // = Fluke tab
-  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.14,first_sale:1.10},
-  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.86,first_sale:1.10},
+  // Soft plastics: "JCB Bait COGS (as of Oct 2026)" all-in per bag minus its excise and label lines (both added separately),
+  // at the Zorn rate from ZORN30_FROM ($30/hr). COGS_40 keeps the $40/hr values for Oct 21–25.
+  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.87,first_sale:1.10},
+  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.89,first_sale:1.10},
+  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.71,first_sale:1.10},
+  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.78,first_sale:1.10},
+  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:0.95,first_sale:1.10},
+  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.82,first_sale:1.10}, // = Fluke tab
+  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.02,first_sale:1.10},
+  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.80,first_sale:1.10},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.50,first_sale:2.46},
-  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:5.53,first_sale:7.70}, // 7 Neko/Finesse bags ≈ $0.79
-  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:8.46,first_sale:11.00},   // 4 Finesse, 3 Hawg, 3 Paddle Tail
-  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:13.23,first_sale:16.50}, // Creek + 2 Soft Jerk, 2 Stick, 1 Craw
+  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:5.22,first_sale:7.70}, // 7 bags at the Neko/Finesse average
+  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:7.85,first_sale:11.00},   // 4 Finesse, 3 Hawg, 3 Paddle Tail
+  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:12.28,first_sale:16.50}, // Creek + 2 Soft Jerk, 2 Stick, 1 Craw
   {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
   {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
   {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
@@ -215,15 +216,24 @@ var COGS_FROM="2026-10-21",OLD_BAG_COST=0.20;
 var OLD_COGS={"baby-hawg":0.67,"craw":0.67,"finesse-worm":0.67,"neko":0.67,"stickbait":0.67,"soft-jerk":0.67,"terp-minnow":0.67,"paddle-tail":0.67,
   "variety-pack":4.69,"creek-box":6.70,"season-box":10.05};
 // Owner labor inside each unit's cost: Mike, Greg and Thomas do all the work unpaid for now, so the P&L shows it as its own
-// line and a cash profit with it added back. From COGS_FROM (sheet): Zorn $40/hr ÷ baits per hour × baits + bagging $0.20/bag.
+// line and a cash profit with it added back. From COGS_FROM (sheet): Zorn rate ÷ baits per hour × baits + bagging $0.20/bag.
 // Before: old BOM labor $160 / 12,000 baits × 8 = $0.11/bag (no bagging labor). XG8: $35 labor in its BOM. Walker: none on its BOM.
-var BAGGING_LABOR=0.20,ZORN_RATE=40; // Zorn (injection) labor $/hr per person, same rate as the sheet
-var OWNER_LABOR={"finesse-worm":0.36,"neko":0.40,"paddle-tail":0.40,"soft-jerk":0.41,"baby-hawg":0.57,"craw":0.54,"stickbait":0.53,
-  "terp-minnow":0.68,"variety-pack":2.66,"creek-box":4.35,"season-box":6.77,"xg8-glide":35};
+var BAGGING_LABOR=0.20;
+// Zorn (injection) labor $/hr per person: $40 from COGS_FROM, $30 from ZORN30_FROM (Thomas 2026-10-26, sheet Inputs). Cost profiles
+// hold the $30 numbers; orders dated COGS_FROM..ZORN30_FROM keep the $40 ones (COGS_40 / OWNER_LABOR_40) so nothing restates.
+var ZORN30_FROM="2026-10-26";
+function zornRate(date){return(date||localDateStr(new Date()))<ZORN30_FROM?40:30;}
+var COGS_40={"finesse-worm":0.75,"neko":0.83,"paddle-tail":0.86,"soft-jerk":0.87,"baby-hawg":0.96,"craw":0.97,"stickbait":1.03,"terp-minnow":1.14,
+  "variety-pack":5.53,"creek-box":8.46,"season-box":13.23};
+var OWNER_LABOR_40={"finesse-worm":0.36,"neko":0.40,"paddle-tail":0.40,"soft-jerk":0.41,"baby-hawg":0.57,"craw":0.54,"stickbait":0.53,
+  "terp-minnow":0.68,"variety-pack":2.66,"creek-box":4.35,"season-box":6.77};
+function isZorn40(cp,date){return COGS_40[cp.id]!==undefined&&(date||localDateStr(new Date()))<ZORN30_FROM;}
+var OWNER_LABOR={"finesse-worm":0.32,"neko":0.35,"paddle-tail":0.35,"soft-jerk":0.36,"baby-hawg":0.48,"craw":0.46,"stickbait":0.45,
+  "terp-minnow":0.56,"variety-pack":2.35,"creek-box":3.77,"season-box":5.85,"xg8-glide":35};
 var OLD_OWNER_LABOR={"finesse-worm":0.11,"neko":0.11,"paddle-tail":0.11,"soft-jerk":0.11,"baby-hawg":0.11,"craw":0.11,"stickbait":0.11,
   "terp-minnow":0.11,"variety-pack":0.75,"creek-box":1.07,"season-box":1.60,"xg8-glide":35};
 function ownerLaborFor(cp,prod,baits,date){
-  var old=isOldCOGS(cp,date),l=(old?OLD_OWNER_LABOR:OWNER_LABOR)[cp.id]||0,pack=prod&&prod.pack>1?prod.pack:0;
+  var old=isOldCOGS(cp,date),l=(old?OLD_OWNER_LABOR:isZorn40(cp,date)?OWNER_LABOR_40:OWNER_LABOR)[cp.id]||0,pack=prod&&prod.pack>1?prod.pack:0;
   if(!baits||!pack||baits===pack||cp.unit!=="bag")return l;
   var bag=old?0:BAGGING_LABOR;return bag+(l-bag)*baits/pack;
 }
@@ -233,7 +243,7 @@ function isOldCOGS(cp,date){return OLD_COGS[cp.id]!==undefined&&(date||localDate
 var LABEL_COST=0.03,LABEL_FROM="2026-10-22";
 function labelCost(date){return(date||localDateStr(new Date()))>=LABEL_FROM?LABEL_COST:0;}
 function bagCOGS(cp,prod,baits,date){
-  var old=isOldCOGS(cp,date),c=old?OLD_COGS[cp.id]:Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
+  var old=isOldCOGS(cp,date),c=old?OLD_COGS[cp.id]:isZorn40(cp,date)?COGS_40[cp.id]:Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
   var labels=llcBagsIn(cp,date)*labelCost(date);
   if(!baits||!pack||baits===pack||cp.unit!=="bag")return c+labels;
   var bag=Math.min(old?OLD_BAG_COST:BAG_COST,c);return bag+(c-bag)*baits/pack+labels;
@@ -1071,16 +1081,16 @@ function receivedByProduct(hist){
   });
   return m;
 }
-// Actual labor per batch (production_batches.make_minutes × people × ZORN_RATE; time includes setup + cleanup) vs the sheet's
+// Actual labor per batch (production_batches.make_minutes × people × zornRate(batch date); time includes setup + cleanup) vs the sheet's
 // standard Zorn labor (run time only, bagging excluded — that's the LLC's). Loose-bait batches also get JCB Mfg's profit on
 // the baits delivered: price to the LLC − excise − materials − actual labor.
 function batchLabor(b){
   if(!b.make_minutes)return null;
   var prod=products.find(function(x){return x.id===b.product_id;}),cp=matchCostProfile(prod),pack=batchPackOf(b),bait=isBaitBatch(b);
-  var baits=bait?b.qty:b.qty*pack,ppl=b.people||1,actual=b.make_minutes/60*ppl*ZORN_RATE;
+  var baits=bait?b.qty:b.qty*pack,ppl=b.people||1,actual=b.make_minutes/60*ppl*zornRate(b.batch_date);
   var stdBait=cp?Math.max(0,ownerLaborFor(cp,prod,null,b.batch_date)-(isOldCOGS(cp,b.batch_date)?0:BAGGING_LABOR))/pack:0;
   var r={b:b,baits:baits,ppl:ppl,actual:actual,std:stdBait*baits,profit:null,profitStd:null};
-  var cost=bait&&prod?baitCostFor(prod.id):null;
+  var cost=bait&&prod?baitCostFor(prod.id,b.batch_date):null;
   if(cost!==null){
     var rev=perBaitRate(cp,b.batch_date)*baits,mat=Math.max(0,cost-stdBait)*baits,ex=rev*EXCISE_RATE;
     r.profit=rev-ex-mat-actual;r.profitStd=rev-ex-mat-r.std;
@@ -1102,7 +1112,7 @@ function batchLaborHTML(list){
       +(r.profit!==null?'<div style="font-size:10px;margin-top:2px;">Mfg profit <strong style="color:'+(r.profit<0?"#dc2626":"#16a34a")+';">'+fmt$(r.profit)+'</strong> <span style="color:#94a3b8;">(at standard labor '+fmt$(r.profitStd)+')</span></div>':'')+'</div>'
       +'<div style="text-align:right;margin-left:8px;"><div style="font-weight:700;">'+fmt$(r.actual)+'</div><div style="font-size:10px;">'+diff(r.actual-r.std)+'</div></div></div>';}).join("")
     +'<div style="font-size:11px;font-weight:700;margin-top:8px;">Total: '+fmt$(t.a)+' actual vs '+fmt$(t.s)+' standard &middot; '+diff(t.a-t.s)+(t.np?' &middot; Mfg profit '+fmt$(t.p)+' (standard '+fmt$(t.ps)+')':'')+'</div>';
-  return'<div class="card" style="border:1px solid #fdba74;"><div style="font-weight:700;font-size:13px;margin-bottom:2px;">&#x23F1;&#xFE0F; Batch Labor &middot; '+monthLabel(trMonth)+'</div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Actual = time (incl. setup + cleanup) &times; people &times; $'+ZORN_RATE+'/hr &middot; standard = the COGS sheet&rsquo;s Zorn run time only, so actual will usually be higher &middot; Mfg profit = price to the LLC on all baits delivered &minus; excise &minus; materials &minus; actual labor (owner labor, not paid)'+(missing?' &middot; <span style="color:#d97706;">'+missing+' batch'+(missing>1?'es':'')+' with no time logged</span>':'')+'</div>'+body+'</div>';
+  return'<div class="card" style="border:1px solid #fdba74;"><div style="font-weight:700;font-size:13px;margin-bottom:2px;">&#x23F1;&#xFE0F; Batch Labor &middot; '+monthLabel(trMonth)+'</div><div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Actual = time (incl. setup + cleanup) &times; people &times; the Zorn rate on the batch date ($40/hr before '+ZORN30_FROM+', $30 from then) &middot; standard = the COGS sheet&rsquo;s Zorn run time only, so actual will usually be higher &middot; Mfg profit = price to the LLC on all baits delivered &minus; excise &minus; materials &minus; actual labor (owner labor, not paid)'+(missing?' &middot; <span style="color:#d97706;">'+missing+' batch'+(missing>1?'es':'')+' with no time logged</span>':'')+'</div>'+body+'</div>';
 }
 function batchesInMonth(ym){var r=monthRange(ym);return batches.filter(function(b){return b.batch_date>=r.start&&b.batch_date<=r.end;});}
 
@@ -1245,7 +1255,7 @@ function linesFromReceived(rec,markup){
 // Loose baits are billed WHEN BAGGED: bags received from a loose-bait batch in the period × baits per bag, at $0.10.
 // Unbagged baits returned to JCB as reusable waste are never sold, so they never reach a PO (no sale, no excise — Thomas).
 // Credit lines (price −$0.10) are still supported for a manual adjustment. Cost = production cost per bait (bag is the LLC's).
-function baitCostFor(pid){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);if(!cp||!p)return null;var pk=p.pack>0?p.pack:8;return Math.round(Math.max(0,Number(cp.cogs)-BAG_COST)/pk*10000)/10000;}
+function baitCostFor(pid,date){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);if(!cp||!p)return null;var pk=p.pack>0?p.pack:8,c=isZorn40(cp,date)?COGS_40[cp.id]:Number(cp.cogs);return Math.round(Math.max(0,c-BAG_COST)/pk*10000)/10000;}
 function looseLine(pid,qty,credit){
   var p=products.find(function(x){return x.id===pid;})||{};
   var rate=perBaitRate(matchCostProfile(p));

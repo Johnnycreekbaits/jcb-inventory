@@ -424,3 +424,10 @@ with the code. Update the sections above if architecture changed.
   `supabase/sql/2026-10-26_batch_people.sql`). Finance Transfers tab: Batch Labor card (see Intercompany transfers). Tested in
   headless Chromium with in-memory times only (no DB writes): B-003 608 Finesse baits → $26.57 Mfg profit at standard labor
   ($0.020/bait), hand-checked. Next (agreed): once a few weeks of times exist, option for the Mfg P&L to use actual labor.
+- **2026-10-26 (Zorn labor $30/hr)** — Thomas lowered injection labor from $40 to $30/hr from 2026-10-26 (`ZORN30_FROM`). Sheet "JCB Bait
+  COGS" Inputs B18 = $30; cost profiles updated in Supabase + `DEFAULT_COSTS` from the sheet: Finesse $0.71, Neko $0.78, Paddle Tail
+  $0.80, Soft Jerk $0.82, Hawg $0.87, Craw $0.89, Stick $0.95, Terp $1.02; bundles Variety $5.22 / Creek $7.85 / Season $12.28.
+  `OWNER_LABOR` re-figured at $30 (Zorn $30 ÷ sheet baits/hr × baits + $0.20 bagging). Orders dated Oct 21–25 keep the $40 numbers
+  (`COGS_40`, `OWNER_LABOR_40`, `isZorn40`); `zornRate(date)` prices batch actual labor; `baitCostFor(pid,date)` is date-aware.
+  Verified: all 87 existing orders identical (combined/LLC/Mfg rev, COGS, excise, labor). Prices to the LLC unchanged (Thomas didn't
+  re-run the safe rule; at $30 it would give Stick/Paddle Tail $0.10, Terp ~$0.12). XG8's $35 labor (hand-made) unchanged.
