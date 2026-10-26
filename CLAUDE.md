@@ -414,4 +414,4 @@ with the code. Update the sections above if architecture changed.
   (today) changed (+$0.03/bag, LLC side).
 - **2026-10-26 (batch time to make)** — Thomas: record how long each batch took. Log Batch / Edit Batch has an optional "Time to
   Make" (hours + minutes) saved as `production_batches.make_minutes`; batch list shows it (e.g. "⏱️ 2h 30m"). Only sent when
-  entered, so batches still save before the SQL runs. SQL `supabase/sql/2026-10-26_batch_make_time.sql` — to be run by Thomas.
+  entered, so batches still save before the SQL runs. SQL `supabase/sql/2026-10-26_batch_make_time.sql` run by Thomas 2026-10-26 (column verified via REST); pushed.
