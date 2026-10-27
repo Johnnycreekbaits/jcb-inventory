@@ -117,7 +117,11 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 
 ## Intercompany transfers
 - Inventory app Stock tab: **Log Batch Made** (no stock change) + **Receive Production** (batch picker fills product +
-  remaining qty, saves `history.batch_id`). "Recent batches" link → list with edit/delete. History filter has `production`.
+  remaining qty, saves `history.batch_id`). **Open Batches card** (`openBatchesCard`) under those buttons lists every open
+  batch for everyone (left, date, logged by, received/bagged by from `batchRecvBy`) with a Receive button that opens
+  Receive Production preselected; "All batches" → list with edit/delete. History filter has `production`.
+- `NAME_ALIAS` + `fixNames()` (both apps) show old user names under the right person ("Team Member 2" = Greg) and fix a
+  device's saved `jcb_user`.
 - Finance **Transfers** tab (month picker): Produced (batches) vs Received (history `production` rows) per product, open
   batches (all months), "Other stock increases" (+ / add / positive adjustment / edit rows — possible unlogged production,
   NOT on the PO), the month's batches (editable), and POs.
@@ -431,3 +435,10 @@ with the code. Update the sections above if architecture changed.
   (`COGS_40`, `OWNER_LABOR_40`, `isZorn40`); `zornRate(date)` prices batch actual labor; `baitCostFor(pid,date)` is date-aware.
   Verified: all 87 existing orders identical (combined/LLC/Mfg rev, COGS, excise, labor). Prices to the LLC unchanged (Thomas didn't
   re-run the safe rule; at $30 it would give Stick/Paddle Tail $0.10, Terp ~$0.12). XG8's $35 labor (hand-made) unchanged.
+- **2026-10-26 (open batches + Greg label)** — "Team Member 2" was Greg's device (B-003, B-004, ~95 history rows since May).
+  Both apps now show it as Greg via `NAME_ALIAS` and rewrite the device's saved name, so new entries say Greg. A direct DB rename
+  was not run; SQL to make it permanent: `supabase/sql/2026-10-26_team_member_2_to_greg.sql` (for Thomas). Stock tab: the small
+  "Recent batches" link is now an Open Batches card so anyone can see batches others logged and do the Receive Production
+  (Receive button preselects the batch). Batch list shows who received/bagged each batch. Tested read-only in headless Chromium
+  (writes blocked): live data, no "Team Member 2" on Stock/History/Returns/Transfers; Receive flow checked with an in-memory batch.
+  All 4 real batches were already fully received, so the card shows "Nothing waiting".

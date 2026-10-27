@@ -379,10 +379,14 @@ var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","D
 var TODAY=new Date().toISOString().slice(0,10);
 
 var products=[],logs=[],auditLog=[],labelDefs=[],adjInFlight=new Set();
-var batches=[],batchRecv={},batchesReady=false,batchInFlight=false;
+var batches=[],batchRecv={},batchRecvBy={},batchesReady=false,batchInFlight=false;
 var activeTab="inv",search="",activeSeries="All",activeStockFilter=null,logFilter="All",histFilter="All",activeLabelProduct=null;
 var rng="3",rv="products",iType="barcodes",iText="",iPrev=null,iMsg="";
 var lastSync=null,cart=JSON.parse(localStorage.getItem("jcb_cart")||"[]"),currentUser=localStorage.getItem("jcb_user")||"",currentChannel="DTC";
+// Greg's device was signed in as "Team Member 2" until 2026-10-26: show those rows as Greg and fix the saved name
+var NAME_ALIAS={"Team Member 2":"Greg"};
+function fixNames(rows,keys){(rows||[]).forEach(function(r){keys.forEach(function(k){if(NAME_ALIAS[r[k]])r[k]=NAME_ALIAS[r[k]];});});return rows;}
+if(NAME_ALIAS[currentUser]){currentUser=NAME_ALIAS[currentUser];localStorage.setItem("jcb_user",currentUser);}
 var currentOrderPerson=localStorage.getItem("jcb_lastPerson")||"",currentOrderProject="",currentOrderDate="",currentOrderState="",currentShipPaid="",currentShipCost="";
 
 function getStatus(qty,min){if(qty===0)return"Out";if(qty<=min)return"Low";return"OK";}
@@ -426,7 +430,7 @@ function boot(){
     logs=l;
     return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());
   }).then(function(h){
-    auditLog=h;
+    auditLog=fixNames(h,["changed_by"]);
     return Promise.all([loadBatches(),loadReturns()]);
   }).then(function(){
     return dbGet("labels","?order=product,color").catch(function(){return [];});
@@ -453,7 +457,7 @@ function isTypingInApp(){
   return !!(appEl&&appEl.contains(el));
 }
 function doRefresh(){
-  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=h;return Promise.all([loadBatches(),loadReturns()]);}).then(function(){return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();if(!isTypingInApp())render();}).catch(function(){});
+  return dbGet("products","?order=name,color").then(function(p){products=p;return dbGet("logs","?order=created_at.desc");}).then(function(l){logs=l;return dbGet("history","?order=changed_at.desc&changed_at=gte."+new Date(Date.now()-30*864e5).toISOString());}).then(function(h){auditLog=fixNames(h,["changed_by"]);return Promise.all([loadBatches(),loadReturns()]);}).then(function(){return dbGet("labels","?order=product,color").catch(function(){return labelDefs;});}).then(function(lb){labelDefs=lb;lastSync=Date.now();if(!isTypingInApp())render();}).catch(function(){});
 }
 setInterval(doRefresh,10000);
 
@@ -461,7 +465,7 @@ function showUserPicker(){
   document.getElementById("app").innerHTML='<div style="max-width:400px;margin:80px auto;padding:24px;background:#fff;border-radius:18px;box-shadow:0 4px 24px rgba(0,0,0,.1);"><div style="font-family:\'Bebas Neue\',cursive;font-size:28px;color:#ea580c;margin-bottom:4px;">JOHNNY CREEK BAITS</div><div style="font-size:13px;color:#64748b;margin-bottom:20px;">Who is using this device?</div><div style="display:flex;flex-direction:column;gap:10px;"><button onclick="setUser(\'Thomas\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Thomas</button><button onclick="setUser(\'Mike\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Mike</button><button onclick="setUser(\'Greg\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Greg</button><button onclick="setUser(\'Candice\')" style="background:#f8fafc;border:1px solid #e2e8f0;color:#1e293b;border-radius:10px;padding:14px;font-weight:600;font-size:14px;cursor:pointer;text-align:left;">Candice</button><div style="margin-top:8px;"><label style="font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-bottom:6px;">OR TYPE YOUR NAME</label><div style="display:flex;gap:8px;"><input id="customName" placeholder="Your name..." style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;font-size:13px;outline:none;"/><button onclick="setUser(document.getElementById(\'customName\').value)" style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px;">Go</button></div></div></div></div>';
 }
 
-function setUser(name){if(!name||!name.trim())return;currentUser=name.trim();localStorage.setItem("jcb_user",currentUser);render();}
+function setUser(name){if(!name||!name.trim())return;currentUser=NAME_ALIAS[name.trim()]||name.trim();localStorage.setItem("jcb_user",currentUser);render();}
 
 function saveCart(){localStorage.setItem("jcb_cart",JSON.stringify(cart));}
 function addToCart(prod){
@@ -719,8 +723,7 @@ function invHTML(){
   // Build unique color list from products
   var allColors=[...new Set(products.map(function(p){return p.color;}).filter(Boolean))].sort();
   var colorTabs=allColors.map(function(c){return'<button class="series-btn'+(search===c?" active":"")+'" data-colorsearch="'+c+'" style="display:flex;align-items:center;gap:4px;">'+dotHtml(c,8)+c+'</button>';}).join("");
-  var nOpen=openBatches().length;
-  return'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;"><button class="btn-outline" id="btnLogBatch" style="font-size:13px;padding:10px;">&#x1F9EA; Log Batch Made</button><button class="btn-primary" id="btnReceiveProd" style="font-size:13px;padding:10px;">+ Receive Production</button></div>'+(batchesReady?'<button id="btnBatchList" style="display:block;width:100%;background:none;border:none;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:10px;font-family:inherit;">Recent batches &middot; '+nOpen+' open (not fully received) &rsaquo;</button>':'<div style="margin-bottom:10px;"></div>')+'<div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><button data-stockfilter="Low" class="kpi" style="background:#fffbeb;border:2px solid '+(activeStockFilter==="Low"?"#d97706":"#fde68a")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Low"?"0 0 0 2px #fde68a":"none")+';"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></button><button data-stockfilter="Out" class="kpi" style="background:#fef2f2;border:2px solid '+(activeStockFilter==="Out"?"#dc2626":"#fecaca")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Out"?"0 0 0 2px #fecaca":"none")+';"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></button><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+escAttr(search)+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div style="margin-bottom:8px;"><div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:6px;">SEARCH BY COLOR</div><div class="series-bar">'+colorTabs+'</div></div><div class="count-label">'+f.length+" VARIANTS</div>"+hiddenHint+cards;
+  return'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;"><button class="btn-outline" id="btnLogBatch" style="font-size:13px;padding:10px;">&#x1F9EA; Log Batch Made</button><button class="btn-primary" id="btnReceiveProd" style="font-size:13px;padding:10px;">+ Receive Production</button></div>'+(batchesReady?openBatchesCard():'<div style="margin-bottom:10px;"></div>')+'<div class="sync-bar"><span>&#x1F7E2; Live &middot; '+currentUser+'</span><span style="font-size:10px;color:#64748b;">Synced '+timeAgo(lastSync)+'</span></div><div class="kpi-grid"><div class="kpi" style="background:#fff7ed;border:1px solid #fed7aa;"><div class="kpi-val" style="color:#ea580c;">'+products.length+'</div><div class="kpi-lbl">SKUs</div></div><button data-stockfilter="Low" class="kpi" style="background:#fffbeb;border:2px solid '+(activeStockFilter==="Low"?"#d97706":"#fde68a")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Low"?"0 0 0 2px #fde68a":"none")+';"><div class="kpi-val" style="color:#d97706;">'+low+'</div><div class="kpi-lbl">Low Stock</div></button><button data-stockfilter="Out" class="kpi" style="background:#fef2f2;border:2px solid '+(activeStockFilter==="Out"?"#dc2626":"#fecaca")+';cursor:pointer;box-shadow:'+(activeStockFilter==="Out"?"0 0 0 2px #fecaca":"none")+';"><div class="kpi-val" style="color:#dc2626;">'+out+'</div><div class="kpi-lbl">Out of Stock</div></button><div class="kpi" style="background:#eff6ff;border:1px solid #bfdbfe;"><div class="kpi-val" style="color:#2563eb;">'+bc+'</div><div class="kpi-lbl">Barcoded</div></div></div><div class="install-hint">&#x1F4F1; Install: Safari &rarr; Share &rarr; Add to Home Screen &middot; Chrome &rarr; &#x22EE; &rarr; Add to Home Screen</div><input class="search-input" id="searchInput" placeholder="Search name, color, SKU, barcode..." value="'+escAttr(search)+'"/><div class="series-bar">'+SERIES.map(function(s){return'<button class="series-btn'+(activeSeries===s?" active":"")+'" data-series="'+s+'">'+s+"</button>";}).join("")+'</div><div style="margin-bottom:8px;"><div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:6px;">SEARCH BY COLOR</div><div class="series-bar">'+colorTabs+'</div></div><div class="count-label">'+f.length+" VARIANTS</div>"+hiddenHint+cards;
 }
 
 function custLineHTML(item,idx,p){
@@ -916,10 +919,13 @@ function delModal(id){
 function loadBatches(){
   return Promise.all([
     dbGet("production_batches","?order=batch_date.desc,created_at.desc"),
-    dbGet("history","?select=batch_id,qty_before,qty_after&batch_id=not.is.null")
+    dbGet("history","?select=batch_id,qty_before,qty_after,changed_by&batch_id=not.is.null")
   ]).then(function(r){
-    batches=r[0];batchRecv={};
-    r[1].forEach(function(h){batchRecv[h.batch_id]=(batchRecv[h.batch_id]||0)+((h.qty_after||0)-(h.qty_before||0));});
+    batches=fixNames(r[0],["made_by","entered_by","edited_by","waste_by"]);batchRecv={};batchRecvBy={};
+    fixNames(r[1],["changed_by"]).forEach(function(h){
+      batchRecv[h.batch_id]=(batchRecv[h.batch_id]||0)+((h.qty_after||0)-(h.qty_before||0));
+      var by=batchRecvBy[h.batch_id]=batchRecvBy[h.batch_id]||[];if(h.changed_by&&by.indexOf(h.changed_by)<0)by.push(h.changed_by);
+    });
     batchesReady=true;
   }).catch(function(){batchesReady=false;});
 }
@@ -994,6 +1000,22 @@ function batchModal(id){
   };
 }
 
+// Stock tab: every open batch, whoever logged it, so anyone can do the Receive Production
+function openBatchesCard(){
+  var ob=openBatches();
+  var rows=ob.map(function(b){
+    var left=batchLeft(b),by=batchRecvBy[b.id];
+    return'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #ede9fe;"><div style="min-width:0;">'
+      +'<div style="font-size:12px;font-weight:700;">'+escHtml((b.batch_no?b.batch_no+" · ":"")+b.product_name+(b.color?" — "+b.color:""))+'</div>'
+      +'<div style="font-size:10px;color:#64748b;margin-top:2px;">'+batchQtyLbl(b,left)+' left'+(isBaitBatch(b)?' (≈'+Math.floor(left/batchPack(b))+' bags)':'')+' &middot; '+b.batch_date+' &middot; logged by '+escHtml(b.entered_by||"?")+(by&&by.length?' &middot; '+(isBaitBatch(b)?'bagged':'received')+' by '+escHtml(by.join(", ")):'')+'</div></div>'
+      +'<button class="btn-primary" data-brecv="'+b.id+'" style="flex-shrink:0;padding:6px 12px;font-size:11px;">Receive</button></div>';
+  }).join("");
+  return'<div class="card" style="border-color:#ddd6fe;padding:10px 12px;"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px;">'
+    +'<div style="font-size:11px;font-weight:700;color:#7c3aed;">&#x1F9EA; OPEN BATCHES &middot; '+ob.length+' waiting to be received</div>'
+    +'<button id="btnBatchList" style="background:none;border:none;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;padding:0;">All batches &rsaquo;</button></div>'
+    +(ob.length?rows:'<div style="font-size:11px;color:#94a3b8;padding-top:4px;">Nothing waiting &mdash; every logged batch has been received.</div>')+'</div>';
+}
+
 function batchListModal(){
   var list=batches.slice(0,60);
   var rows=list.length===0?'<div style="text-align:center;color:#94a3b8;padding:30px;">No batches logged yet</div>':list.map(function(b){
@@ -1001,7 +1023,7 @@ function batchListModal(){
     var st=left>0?'<span class="hist-badge" style="background:#fff7ed;color:#ea580c;">'+batchQtyLbl(b,left)+' '+(bait?'loose':'open')+'</span>':left<0?'<span class="hist-badge" style="background:#fef2f2;color:#dc2626;">over by '+batchQtyLbl(b,-left)+'</span>':'<span class="hist-badge" style="background:#dcfce7;color:#16a34a;">'+(bait?'closed':'received')+'</span>';
     return'<div class="hist-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">'+escHtml(b.product_name+(b.color?" — "+b.color:""))+' '+st+'</div>'
       +'<div style="font-size:11px;color:#64748b;margin-top:3px;">'+escHtml(b.batch_no||"No batch #")+' &middot; '+b.batch_date+' &middot; '+(bait?'delivered '+b.qty+' baits &middot; bagged '+rec+' ('+(batchRecv[b.id]||0)+' bags)'+(b.waste_baits?' &middot; <span style="color:#7c3aed;">returned '+b.waste_baits+' as waste</span>':''):'made '+b.qty+' &middot; received '+rec)+(b.make_minutes?' &middot; &#x23F1;&#xFE0F; '+fmtMakeTime(b.make_minutes)+(b.people>1?' &times; '+b.people+' people':''):'')+'</div>'
-      +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Made by '+escHtml(b.made_by||"?")+' &middot; entered by '+escHtml(b.entered_by||"?")+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+(b.waste_date?' &middot; waste '+b.waste_date+' by '+escHtml(b.waste_by||"?"):'')+(b.note?' &middot; '+escHtml(b.note):'')+'</div>'
+      +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Made by '+escHtml(b.made_by||"?")+' &middot; entered by '+escHtml(b.entered_by||"?")+(batchRecvBy[b.id]&&batchRecvBy[b.id].length?' &middot; '+(bait?'bagged':'received')+' by '+escHtml(batchRecvBy[b.id].join(", ")):'')+(b.edited_by?' &middot; edited by '+escHtml(b.edited_by)+' '+fmtDate(b.edited_at):'')+(b.waste_date?' &middot; waste '+b.waste_date+' by '+escHtml(b.waste_by||"?"):'')+(b.note?' &middot; '+escHtml(b.note):'')+'</div>'
       +(bait&&left>0?'<button class="btn-outline" data-bwaste="'+b.id+'" style="margin-top:6px;padding:5px 10px;font-size:11px;">&#x267B;&#xFE0F; Return '+left+' leftover to JCB as reusable waste</button>':'')+'</div>'
       +'<div style="display:flex;gap:5px;flex-shrink:0;"><button class="edit-btn" data-bedit="'+b.id+'">&#x270F;&#xFE0F;</button><button class="del-btn" data-bdel="'+b.id+'">&#x1F5D1;&#xFE0F;</button></div></div></div>';
   }).join("");
@@ -1054,7 +1076,7 @@ function wasteReturnModal(id){
   };
 }
 
-function receiveProductionModal(){
+function receiveProductionModal(preBatchId){
   var prodOpts=products.map(function(p){return'<option value="'+p.id+'">'+escHtml(p.name+(p.color?' — '+p.color:''))+'</option>';}).join("");
   var ob=openBatches();
   var batchField=batchesReady?'<div class="field-wrap"><label class="field-label">Batch</label><select class="field-input" id="rpBatch"><option value="">&mdash; No batch (not logged) &mdash;</option>'+ob.map(function(b){return'<option value="'+b.id+'">'+escHtml(batchLabel(b))+' · '+(isBaitBatch(b)?batchLeft(b)+' loose baits (≈'+Math.floor(batchLeft(b)/batchPack(b))+' bags)':batchLeft(b)+' left')+'</option>';}).join("")+'</select>'+(ob.length?'':'<div style="font-size:10px;color:#94a3b8;margin-top:4px;">No open batches. Log one with &ldquo;Log Batch Made&rdquo;.</div>')+'</div>':'';
@@ -1068,6 +1090,7 @@ function receiveProductionModal(){
     ps.disabled=!!b;
     if(b){ps.value=String(b.product_id);document.getElementById("rpQty").value=isBaitBatch(b)?Math.floor(batchLeft(b)/batchPack(b)):batchLeft(b);}
   };
+  if(selB&&preBatchId){selB.value=String(preBatchId);selB.onchange();}
   document.getElementById("btnRPConfirm").onclick=function(){
     var b=pickedBatch();
     var pid=b?b.product_id:parseInt(document.getElementById("rpProd").value);
@@ -1097,7 +1120,7 @@ var returnsList=[],returnsReady=false,retSaveInFlight=false;
 var retMode="order",retOrderId=null,retQtys={},retPid=null,retQty="",retReason="",retNote="",retDate="",retRestock=true,retLogFilter="all";
 
 function loadReturns(){
-  return dbGet("returns","?order=return_date.desc,created_at.desc").then(function(r){returnsList=r;returnsReady=true;}).catch(function(){returnsReady=false;});
+  return dbGet("returns","?order=return_date.desc,created_at.desc").then(function(r){returnsList=fixNames(r,["returned_by"]);returnsReady=true;}).catch(function(){returnsReady=false;});
 }
 // Lines of an order in return terms: [{pid,name,color,qty,price,components?}] (legacy orders → one line)
 function orderLines(log){
@@ -1515,6 +1538,7 @@ function wire(){
   var btnRP=document.getElementById("btnReceiveProd");if(btnRP)btnRP.onclick=function(){receiveProductionModal();};
   var btnLB=document.getElementById("btnLogBatch");if(btnLB)btnLB.onclick=function(){batchModal(null);};
   var btnBL=document.getElementById("btnBatchList");if(btnBL)btnBL.onclick=function(){batchListModal();};
+  document.querySelectorAll("[data-brecv]").forEach(function(btn){btn.onclick=function(){receiveProductionModal(parseInt(btn.dataset.brecv));};});
   var btnConfirm=document.getElementById("btnConfirmOrder");if(btnConfirm)btnConfirm.onclick=function(){confirmOrder();};
   var btnSC=document.getElementById("btnStartCustom");if(btnSC)btnSC.onclick=function(){currentChannel="Custom";render();};
   var btnClear=document.getElementById("btnClearCart");if(btnClear)btnClear.onclick=function(){if(!cart.length&&isCustomCh(currentChannel))currentChannel="DTC";cart=[];saveCart();render();};

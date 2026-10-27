@@ -1033,6 +1033,10 @@ function reportHTML(){
 var TR_SKIP_SERIES=["Bundles","Apparel"];
 var PO_DEFAULT_NOTE="For resale — sales tax exempt (CDTFA-230 on file)";
 var currentUser=localStorage.getItem("jcb_user")||"";
+// Greg's device was signed in as "Team Member 2" until 2026-10-26 (same alias as index.html)
+var NAME_ALIAS={"Team Member 2":"Greg"};
+function fixNames(rows,keys){(rows||[]).forEach(function(r){keys.forEach(function(k){if(NAME_ALIAS[r[k]])r[k]=NAME_ALIAS[r[k]];});});return rows;}
+if(NAME_ALIAS[currentUser]){currentUser=NAME_ALIAS[currentUser];localStorage.setItem("jcb_user",currentUser);}
 var batches=[],batchRecvAll={},pos=[],trReady=null,trErr="";
 var trMonth=localDateStr(new Date()).slice(0,7),trHistCache={},trLoading={};
 var trInFlight=false,poDraft=null;
@@ -1052,7 +1056,7 @@ function loadTransfers(){
     dbGet("history","?select=batch_id,qty_before,qty_after&batch_id=not.is.null"),
     dbGet("transfer_pos","?order=po_date.desc,created_at.desc")
   ]).then(function(r){
-    batches=r[0];pos=r[2];batchRecvAll={};
+    batches=fixNames(r[0],["made_by","entered_by","edited_by","waste_by"]);pos=r[2];batchRecvAll={};
     r[1].forEach(function(h){batchRecvAll[h.batch_id]=(batchRecvAll[h.batch_id]||0)+((h.qty_after||0)-(h.qty_before||0));});
     trReady=true;trErr="";
   }).catch(function(e){trReady=false;trErr=e.message||String(e);});
@@ -1062,7 +1066,7 @@ function fetchHist(start,end){
   var key=start+"|"+end;
   if(trHistCache[key])return Promise.resolve(trHistCache[key]);
   return dbGet("history","?select=id,product_id,product_name,color,change_type,qty_before,qty_after,changed_by,note,changed_at,batch_id&order=changed_at.asc&changed_at=gte."+encodeURIComponent(localStart(start).toISOString())+"&changed_at=lt."+encodeURIComponent(dayAfter(end).toISOString()))
-    .then(function(rows){trHistCache[key]=rows;return rows;});
+    .then(function(rows){trHistCache[key]=fixNames(rows,["changed_by"]);return rows;});
 }
 // Loose-bait batches (unit "bait", logged from PER_BAIT_FROM): their bag receipts are billed per BAIT by linesFromLoose,
 // so receivedByProduct (per-bag pricing) skips them. bagged = bags received × baits per bag; unbagged leftovers go back to
