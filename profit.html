@@ -129,19 +129,19 @@ function dbDelete(t,f){return fetch(SB_URL+"/rest/v1/"+t+"?"+f,{method:"DELETE",
 
 var DEFAULT_COSTS=[
   // Soft plastics: "JCB Bait COGS (as of Oct 2026)" all-in per bag minus its excise and label lines (both added separately),
-  // at the Zorn rate from ZORN30_FROM ($30/hr). COGS_40 keeps the $40/hr values for Oct 21–25.
-  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.87,first_sale:1.10},
-  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.89,first_sale:1.10},
-  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.71,first_sale:1.10},
-  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.78,first_sale:1.10},
-  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:0.95,first_sale:1.10},
-  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.82,first_sale:1.10}, // = Fluke tab
-  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.02,first_sale:1.10},
-  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.80,first_sale:1.10},
+  // at $30/hr Zorn, 7.73 lb/gal and 5% waste from DENSITY_FROM. COGS_40 keeps Oct 21–25, COGS_30 keeps Oct 26–27.
+  {id:"baby-hawg",name:"Baby Hawg",series:"Baby Hawgs",unit:"bag",cogs:0.90,first_sale:1.10},
+  {id:"craw",name:"Craw",series:"Craws",unit:"bag",cogs:0.93,first_sale:1.10},
+  {id:"finesse-worm",name:"6in Finesse Worm",series:"Finesse Worms",unit:"bag",cogs:0.75,first_sale:1.10},
+  {id:"neko",name:"Neko",series:"Nekos",unit:"bag",cogs:0.82,first_sale:1.10},
+  {id:"stickbait",name:"Stick Bait",series:"Stick Baits",unit:"bag",cogs:1.00,first_sale:1.10},
+  {id:"soft-jerk",name:"Soft Jerk",series:"Soft Jerk",unit:"bag",cogs:0.86,first_sale:1.10}, // = Fluke tab
+  {id:"terp-minnow",name:"Terp Minnow",series:"Terp Minnow",unit:"bag",cogs:1.07,first_sale:1.10},
+  {id:"paddle-tail",name:"Paddle Tail",series:"Paddle Tail",unit:"bag",cogs:0.85,first_sale:1.10},
   {id:"kanji-ball",name:"Kanji Ball",series:"Kanji Ball",unit:"bait",cogs:1.50,first_sale:2.46},
-  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:5.22,first_sale:7.70}, // 7 bags at the Neko/Finesse average
-  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:7.85,first_sale:11.00},   // 4 Finesse, 3 Hawg, 3 Paddle Tail
-  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:12.28,first_sale:16.50}, // Creek + 2 Soft Jerk, 2 Stick, 1 Craw
+  {id:"variety-pack",name:"Variety Pack",series:"Bundles",unit:"pack",cogs:5.50,first_sale:7.70}, // 7 bags at the Neko/Finesse average
+  {id:"creek-box",name:"Creek Box",series:"Bundles",unit:"box",cogs:8.25,first_sale:11.00},   // 4 Finesse, 3 Hawg, 3 Paddle Tail
+  {id:"season-box",name:"Season Box",series:"Bundles",unit:"box",cogs:12.90,first_sale:16.50}, // Creek + 2 Soft Jerk, 2 Stick, 1 Craw
   {id:"j-rat",name:"J-Rat",series:"J-Rat",unit:"bag",cogs:1.04},
   {id:"swim-bait",name:"Swim Bait",series:"Swim Bait",unit:"bag",cogs:1.04},
   {id:"apparel",name:"Apparel",series:"Apparel",unit:"item",cogs:5.00},
@@ -228,6 +228,15 @@ var COGS_40={"finesse-worm":0.75,"neko":0.83,"paddle-tail":0.86,"soft-jerk":0.87
 var OWNER_LABOR_40={"finesse-worm":0.36,"neko":0.40,"paddle-tail":0.40,"soft-jerk":0.41,"baby-hawg":0.57,"craw":0.54,"stickbait":0.53,
   "terp-minnow":0.68,"variety-pack":2.66,"creek-box":4.35,"season-box":6.77};
 function isZorn40(cp,date){return COGS_40[cp.id]!==undefined&&(date||localDateStr(new Date()))<ZORN30_FROM;}
+// Plastic density + waste from DENSITY_FROM (Thomas 2026-10-28, sheet Inputs): 425 lb per 55 gal drum = 7.73 lb/gal (was an
+// 8.5 guess) and 5% waste (was 0). Cost profiles hold the new numbers; orders dated ZORN30_FROM..DENSITY_FROM keep COGS_30.
+// Owner labor is unchanged (labor per bait doesn't depend on plastic weight).
+var DENSITY_FROM="2026-10-28";
+var COGS_30={"finesse-worm":0.71,"neko":0.78,"paddle-tail":0.80,"soft-jerk":0.82,"baby-hawg":0.87,"craw":0.89,"stickbait":0.95,"terp-minnow":1.02,
+  "variety-pack":5.22,"creek-box":7.85,"season-box":12.28};
+function isDensityOld(cp,date){return COGS_30[cp.id]!==undefined&&(date||localDateStr(new Date()))<DENSITY_FROM;}
+// Production cost per unit on a date (no excise, no label): old flat BOM, $40 Zorn, $30 Zorn at 8.5 lb/gal, else the cost profile.
+function cogsFor(cp,date){return isOldCOGS(cp,date)?OLD_COGS[cp.id]:isZorn40(cp,date)?COGS_40[cp.id]:isDensityOld(cp,date)?COGS_30[cp.id]:Number(cp.cogs)||0;}
 var OWNER_LABOR={"finesse-worm":0.32,"neko":0.35,"paddle-tail":0.35,"soft-jerk":0.36,"baby-hawg":0.48,"craw":0.46,"stickbait":0.45,
   "terp-minnow":0.56,"variety-pack":2.35,"creek-box":3.77,"season-box":5.85,"xg8-glide":35};
 var OLD_OWNER_LABOR={"finesse-worm":0.11,"neko":0.11,"paddle-tail":0.11,"soft-jerk":0.11,"baby-hawg":0.11,"craw":0.11,"stickbait":0.11,
@@ -243,7 +252,7 @@ function isOldCOGS(cp,date){return OLD_COGS[cp.id]!==undefined&&(date||localDate
 var LABEL_COST=0.03,LABEL_FROM="2026-10-22";
 function labelCost(date){return(date||localDateStr(new Date()))>=LABEL_FROM?LABEL_COST:0;}
 function bagCOGS(cp,prod,baits,date){
-  var old=isOldCOGS(cp,date),c=old?OLD_COGS[cp.id]:isZorn40(cp,date)?COGS_40[cp.id]:Number(cp.cogs)||0,pack=prod&&prod.pack>1?prod.pack:0;
+  var old=isOldCOGS(cp,date),c=cogsFor(cp,date),pack=prod&&prod.pack>1?prod.pack:0;
   var labels=llcBagsIn(cp,date)*labelCost(date);
   if(!baits||!pack||baits===pack||cp.unit!=="bag")return c+labels;
   var bag=Math.min(old?OLD_BAG_COST:BAG_COST,c);return bag+(c-bag)*baits/pack+labels;
@@ -1259,7 +1268,7 @@ function linesFromReceived(rec,markup){
 // Loose baits are billed WHEN BAGGED: bags received from a loose-bait batch in the period × baits per bag, at $0.10.
 // Unbagged baits returned to JCB as reusable waste are never sold, so they never reach a PO (no sale, no excise — Thomas).
 // Credit lines (price −$0.10) are still supported for a manual adjustment. Cost = production cost per bait (bag is the LLC's).
-function baitCostFor(pid,date){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);if(!cp||!p)return null;var pk=p.pack>0?p.pack:8,c=isZorn40(cp,date)?COGS_40[cp.id]:Number(cp.cogs);return Math.round(Math.max(0,c-BAG_COST)/pk*10000)/10000;}
+function baitCostFor(pid,date){var p=products.find(function(x){return x.id===pid;});var cp=matchCostProfile(p);if(!cp||!p)return null;var pk=p.pack>0?p.pack:8,c=cogsFor(cp,date);return Math.round(Math.max(0,c-BAG_COST)/pk*10000)/10000;}
 function looseLine(pid,qty,credit){
   var p=products.find(function(x){return x.id===pid;})||{};
   var rate=perBaitRate(matchCostProfile(p));

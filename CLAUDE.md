@@ -442,3 +442,9 @@ with the code. Update the sections above if architecture changed.
   (Receive button preselects the batch). Batch list shows who received/bagged each batch. Tested read-only in headless Chromium
   (writes blocked): live data, no "Team Member 2" on Stock/History/Returns/Transfers; Receive flow checked with an in-memory batch.
   All 4 real batches were already fully received, so the card shows "Nothing waiting".
+- **2026-10-28 (plastic density + waste)** — Thomas: a 55 gal drum holds 425 lb of plastic, so sheet Inputs B11 = 7.73 lb/gal (was
+  an 8.5 guess), and waste B15 = 5% (sprue is remelted; covers color changes, purges, scrap). From `DENSITY_FROM` 2026-10-28 cost
+  profiles take the new sheet numbers (Supabase + `DEFAULT_COSTS`); orders dated Oct 26–27 keep the earlier $30 values (`COGS_30`).
+  New `cogsFor(cp,date)` picks the cost for a date (old BOM / `COGS_40` / `COGS_30` / profile), used by `bagCOGS` and `baitCostFor`.
+  Owner labor unchanged. Verified in headless Chrome (writes blocked): 88 orders before Oct 28 identical (combined/LLC/Mfg rev,
+  COGS, excise, labor); only today's Shopify order uses the new costs.
