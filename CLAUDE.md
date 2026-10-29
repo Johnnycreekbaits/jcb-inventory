@@ -46,6 +46,10 @@ Project `rgjnasxasmwzvywgkgdu` — https://supabase.com/dashboard/project/rgjnas
 - `expenses` — monthly expenses (month, category, amount, description, created_by)
 - `cost_profiles` — COGS per product (id, name, series, unit, cogs = production cost WITHOUT excise, first_sale = JCB Mfg →
   LLC transfer price per unit, the excise base); seeded on first load. SQL: `supabase/sql/2026-10-13_excise_first_sale.sql`
+- `color_costs` — material cost per gallon for each `products.color` (color, recipe, per_gal, as_of), copied from the Google
+  Sheet "JCB Color Formulas & Batch Calculator". Read only by the Report tab's Cost by Color section; COGS doesn't use it.
+  Colors with no row (laminates, unmatched names) use the average. SQL: `supabase/sql/2026-10-29_color_costs.sql`.
+  When recipe prices change on the sheet, re-copy the numbers here.
 
 ## Backups
 - `backup_supabase.py` exports all 5 tables (JSON + CSV) to
@@ -448,3 +452,10 @@ with the code. Update the sections above if architecture changed.
   New `cogsFor(cp,date)` picks the cost for a date (old BOM / `COGS_40` / `COGS_30` / profile), used by `bagCOGS` and `baitCostFor`.
   Owner labor unchanged. Verified in headless Chrome (writes blocked): 88 orders before Oct 28 identical (combined/LLC/Mfg rev,
   COGS, excise, labor); only today's Shopify order uses the new costs.
+- **2026-10-29 (cost by color)** — Report tab: new Cost by Color section (`colorCostHTML`, after Units Sold by Product). For each
+  soft-plastic color sold in the period it shows how much that color's real recipe would change cost of goods versus the single
+  average every COGS number uses (grams per style in `STYLE_GRAMS`, 7.73 lb/gal, 5% waste). Report only: COGS, P&L and the company
+  split are unchanged. Manufacturing + Combined views; the LLC view says color doesn't change its costs. Data from new table
+  `color_costs` (SQL for Thomas to run); until it exists the section says color costs aren't set up. Tested read-only in headless
+  Chrome with the seed rows in memory: all 3 company views and the full Report tab render. 21 product colors matched to recipes;
+  laminates and a few names (Ringo's Gift, Ringo Rainbow, Midnight Silver, Oxblood & Jelly) wait on Thomas.

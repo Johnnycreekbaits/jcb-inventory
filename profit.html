@@ -486,6 +486,7 @@ function boot(){
     dbGet("expenses","?select=entity&limit=1").then(function(){expHasEntity=true;if(activeTab==="exp")render();}).catch(function(){expHasEntity=false;});
     render();
     loadTransfers().then(function(){if(activeTab==="tr"||activeTab==="prod")render();});
+    dbGet("color_costs","?order=color").then(function(r){colorCosts=r;if(activeTab==="rep")render();}).catch(function(){colorCosts=null;});
     // Load cost profiles after initial render — non-blocking
     dbGet("cost_profiles","?order=name").catch(function(){return null;}).then(function(dbCosts){
       if(dbCosts===null)return;
@@ -912,6 +913,47 @@ function getYTDExpenses(){
   return expenses.filter(function(e){return e.month&&e.month.startsWith(y)&&e.category!==EXCISE_CAT&&entityExp(e);});
 }
 
+// Cost by Color (Report tab). color_costs = material cost per gallon for each products.color, from the
+// "JCB Color Formulas & Batch Calculator" sheet. COGS everywhere uses one average for every color (COLOR_AVG_PER_GAL:
+// the COGS sheet's $513 per 25 gal batch); this section shows what each color's real recipe changes, at today's prices.
+// Report only. Color only moves JCB Manufacturing's cost: the LLC pays the same per bait for every color.
+// null = table not set up yet (supabase/sql/2026-10-29_color_costs.sql).
+var colorCosts=null;
+var COLOR_AVG_PER_GAL=513/25,COLOR_LB_PER_GAL=7.73,COLOR_WASTE=0.05,G_PER_LB=453.592;
+var STYLE_GRAMS={"finesse-worm":5.0,"paddle-tail":8.5,"baby-hawg":4.9,"neko":5.8,"craw":5.9,"stickbait":7.5,"terp-minnow":6.7,"soft-jerk":6.6};
+function colorCostHTML(fl){
+  var hd='<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">COST BY COLOR</div>';
+  var note=function(t){return'<div style="font-size:11px;color:#94a3b8;padding:6px 0;line-height:1.5;">'+t+'</div>';};
+  if(entity==="llc")return hd+note('Johnny Creek Baits, LLC pays JCB Manufacturing the same price per bait for every color, so color doesn&rsquo;t change the LLC&rsquo;s costs. See the JCB Manufacturing or Combined report.')+'</div>';
+  if(!colorCosts)return hd+note('Color costs aren&rsquo;t set up yet.')+'</div>';
+  var map={},asOf="",by={};
+  colorCosts.forEach(function(c){map[c.color]=c;if(c.as_of>asOf)asOf=c.as_of;});
+  fl.forEach(function(l){
+    calcOrderLines(l,products,"combined").forEach(function(x){
+      var p=x.pid!=null?products.find(function(y){return y.id===x.pid;}):null;if(!p||!x.qty)return;
+      var cp=matchCostProfile(p),g=cp&&STYLE_GRAMS[cp.id];if(!g)return;
+      var n=perBaitCount(cp,p,x.baits)*x.qty;if(!n)return;
+      var k=p.color||"Unknown";
+      if(!by[k])by[k]={bags:0,grams:0,c:map[k]};
+      by[k].bags+=x.qty;by[k].grams+=n*g*(1+COLOR_WASTE);
+    });
+  });
+  var perGram=1/(COLOR_LB_PER_GAL*G_PER_LB),tot=0,bags=0,avgBags=0;
+  var rows=Object.keys(by).sort(function(a,b){return by[b].bags-by[a].bags;}).map(function(k){
+    var d=by[k],pg=d.c?Number(d.c.per_gal):COLOR_AVG_PER_GAL,diff=d.grams*(pg-COLOR_AVG_PER_GAL)*perGram;
+    tot+=diff;bags+=d.bags;if(!d.c)avgBags+=d.bags;
+    return'<div class="pl-row" style="align-items:flex-start;"><div><div style="font-weight:600;font-size:13px;">'+k+'</div>'
+      +'<div style="font-size:10px;color:#94a3b8;">'+d.bags+(d.bags===1?' bag':' bags')+' &middot; '+(d.c?fmt$(pg)+' per gal materials':'average used (no recipe matched)')+'</div></div>'
+      +'<div style="text-align:right;font-weight:600;color:'+(diff>0.005?'#dc2626':diff<-0.005?'#16a34a':'#94a3b8')+';">'+(Math.abs(diff)<0.005?'&mdash;':(diff>0?'+':'-')+fmt$(Math.abs(diff)))+'</div></div>';
+  }).join("");
+  if(!rows)return hd+note('No soft-plastic bags sold in this period.')+'</div>';
+  var lower=tot<0;
+  return hd+note('Cost of goods in this report uses one average for every color ('+fmt$(COLOR_AVG_PER_GAL)+' of materials per gallon). Each color&rsquo;s real recipe costs more or less than that. Right column = how much that color would change this period&rsquo;s cost of goods. Today&rsquo;s prices'+(asOf?', recipes as of '+asOf:'')+'. Bundles use the average.')
+    +rows
+    +'<div class="pl-total-row"><span>At real color costs</span><span style="color:'+(lower?'#16a34a':'#dc2626')+';">'+(Math.abs(tot)<0.005?'No change':fmt$(Math.abs(tot))+(lower?' lower':' higher')+' cost of goods')+'</span></div>'
+    +note(bags+' soft-plastic bags'+(avgBags?' &middot; '+avgBags+' of them use the average (laminates and colors without a matched recipe)':'')+'. The difference lands in JCB Manufacturing&rsquo;s profit.')
+    +'</div>';
+}
 function reportHTML(){
   var fl=getPeriodLogs(),fe=getPeriodExpenses(),s=calcSummary(fl,fe);
 
@@ -1033,6 +1075,7 @@ function reportHTML(){
         +'<div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">UNITS SOLD BY PRODUCT</div>'
         +(productRows||'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">No units in this period</div>')
       +'</div>'
+      +colorCostHTML(fl)
       +(function(){var ar=calcAccountsReceivable();return entity==="mfg"?'':'<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:8px;">BALANCE SHEET NOTE</div><div class="pl-row"><span style="color:#475569;">Inventory Value (at cost &middot; on hand)</span><span style="font-weight:700;color:#7c3aed;">'+fmt$(calcInventoryValue())+'</span></div>'+(ar.count>0?'<div class="pl-row"><span style="color:#475569;">Accounts Receivable (Dealer / Distro unpaid)</span><span style="font-weight:700;color:#dc2626;">'+fmt$(ar.total)+'<span style="font-size:10px;font-weight:400;color:#94a3b8;margin-left:4px;">'+ar.count+' orders</span></span></div>':'<div class="pl-row" style="font-size:11px;"><span style="color:#94a3b8;">Accounts Receivable</span><span style="color:#16a34a;font-weight:600;">$0.00 &mdash; all paid</span></div>')+'</div>'})()
 
     +'</div>'+trendCardHTML()+(entity==="combined"?splitCardHTML():'')+productProfitCardHTML(fl);
